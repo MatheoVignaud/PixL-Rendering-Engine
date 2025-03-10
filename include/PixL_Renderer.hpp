@@ -1,8 +1,9 @@
 #pragma once
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
+#include <SDL3/SDL.h>
+#include <SDL3_Image/SDL_image.h>
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <mutex>
 #include <stdio.h>

@@ -13,22 +13,10 @@ PixL_Renderer::PixL_Renderer()
     {
         std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
     }
-    else
-    {
-        // init SDL_image
-        int imgFlags = IMG_INIT_PNG;
-        if (!(IMG_Init(imgFlags) & imgFlags))
-        {
-            std::cerr << "SDL_image could not initialize! SDL_image Error: " << IMG_GetError() << std::endl;
-        }
-    }
 }
 
 PixL_Renderer::~PixL_Renderer()
 {
-    // quit SDL_image
-    IMG_Quit();
-
     // quit SDL
     SDL_Quit();
 }
@@ -110,14 +98,14 @@ int PixL_Renderer::draw_texture(PixL_Texture *texture, PixL_Draw_Property &prope
     }
 
     // set src rect
-    SDL_Rect src_rect;
+    SDL_FRect src_rect;
     src_rect.x = (property.src_x - property.src_w / 2) * texture->_width;
     src_rect.y = (property.src_y - property.src_h / 2) * texture->_height;
     src_rect.w = property.src_w * texture->_width;
     src_rect.h = property.src_h * texture->_height;
 
     // set dst rect
-    SDL_Rect dst_rect;
+    SDL_FRect dst_rect;
     dst_rect.x = (property.x - property.w / 2) * screenw;
     dst_rect.y = (property.y - property.h / 2) * screenh;
     dst_rect.w = property.w * screenw;
@@ -142,7 +130,7 @@ int PixL_Renderer::draw_texture(PixL_Texture *texture, PixL_Draw_Property &prope
     SDL_SetTextureAlphaMod(current_texture, property.a);
 
     // render texture
-    SDL_RenderCopyEx(this->_renderer, current_texture, &src_rect, &dst_rect, property.rot, NULL, (SDL_RendererFlip)flip);
+    SDL_RenderTextureRotated(this->_renderer, current_texture, &src_rect, &dst_rect, property.rot, NULL, (SDL_FlipMode)flip);
 
     return 0;
 }
@@ -241,7 +229,7 @@ int PixL_Renderer::draw_mode7(PixL_Texture *texture, PixL_Draw_Property &propert
 
     int indices[6] = {0, 1, 2, 0, 2, 3};
 
-    SDL_RenderGeometryRaw(this->_renderer, texture->_texture, (float *)points, sizeof(SDL_FPoint), color, sizeof(SDL_Color), (float *)uv, sizeof(float) * 2, 4, indices, 6, 4);
+    // SDL_RenderGeometryRaw(this->_renderer, texture->_texture, (float *)points, sizeof(SDL_FPoint), color, sizeof(SDL_Color), (float *)uv, sizeof(float) * 2, 4, indices, 6, 4);
 
     return 0;
 }
@@ -268,8 +256,8 @@ bool PixL_Renderer::mods_texture(PixL_Texture *texture, PixL_Draw_Property &prop
 SDL_Texture *PixL_Renderer::mosaic(PixL_Texture *texture, PixL_Draw_Property &property, int screenw, int screenh)
 {
 
-    int texture_w, texture_h;
-    SDL_QueryTexture(texture->_texture, NULL, NULL, &texture_w, &texture_h);
+    float texture_w, texture_h;
+    SDL_GetTextureSize(texture->_texture, &texture_w, &texture_h);
 
     float aspect_ratio = property.w / property.h;
 
@@ -293,8 +281,8 @@ SDL_Texture *PixL_Renderer::mosaic(PixL_Texture *texture, PixL_Draw_Property &pr
     {
         for (int y = 0; y < mosaic_h; y++)
         {
-            int texture_x = ((float)texture_w / mosaic_w) * (x + 0.5f);
-            int texture_y = ((float)texture_h / mosaic_h) * (y + 0.5f);
+            float texture_x = (texture_w / mosaic_w) * (x + 0.5f);
+            float texture_y = (texture_h / mosaic_h) * (y + 0.5f);
 
             texture_x = std::min(texture_x, texture_w - 1);
             texture_y = std::min(texture_y, texture_h - 1);
@@ -361,13 +349,13 @@ SDL_Window *CreateWindow(const char *title, int x, int y, int w, int h, Uint32 f
         return nullptr;
     }
 
-    PixL_Renderer::_instance->_window = SDL_CreateWindow(title, x, y, w, h, SDL_WINDOW_RESIZABLE);
+    PixL_Renderer::_instance->_window = SDL_CreateWindow(title, w, h, SDL_WINDOW_RESIZABLE);
     if (PixL_Renderer::_instance->_window == nullptr)
     {
         std::cerr << "Window could not be created! SDL_Error: " << SDL_GetError() << std::endl;
     }
 
-    PixL_Renderer::_instance->_renderer = SDL_CreateRenderer(PixL_Renderer::_instance->_window, -1, SDL_RENDERER_ACCELERATED);
+    PixL_Renderer::_instance->_renderer = SDL_CreateRenderer(PixL_Renderer::_instance->_window, NULL);
 
     return PixL_Renderer::_instance->_window;
 }
@@ -394,12 +382,11 @@ PixL_Texture *CreateTexture(const char *path)
     SDL_Surface *surface = IMG_Load(path);
     if (!surface)
     {
-        std::cerr << "Erreur IMG_Load: " << IMG_GetError() << std::endl;
         return nullptr;
     }
 
     // convert surface to SDL_PIXELFORMAT_RGBA8888
-    surface = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_RGBA8888, 0);
+    surface = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA8888);
 
     SDL_Texture *texture = SDL_CreateTexture(PixL_Renderer::_instance->_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, surface->w, surface->h);
     if (texture == nullptr)
@@ -416,8 +403,8 @@ PixL_Texture *CreateTexture(const char *path)
 
     PixL_Texture *pixl_texture = new PixL_Texture();
 
-    int w, h;
-    SDL_QueryTexture(texture, NULL, NULL, &w, &h);
+    float w, h;
+    SDL_GetTextureSize(texture, &w, &h);
     pixl_texture->_width = w;
     pixl_texture->_height = h;
     pixl_texture->_texture = texture;
@@ -458,7 +445,7 @@ PixL_Texture *CreateTexture(std::vector<uint8_t> &data, int width, int height, P
         return nullptr;
     }
 
-    SDL_PixelFormatEnum pixel_format;
+    SDL_PixelFormat pixel_format;
     switch (format)
     {
     case PixelDataFormat::PIXL_PIXEL_FORMAT_RGB:
