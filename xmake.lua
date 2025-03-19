@@ -29,8 +29,8 @@ target("shaders")
 
 target("PixL-Engine")
     set_kind("binary")
-    --add_includedirs("include")
-    add_files("src/main.cpp")
+    add_includedirs("include")
+    add_files("src/**.cpp")
     add_packages("libsdl3", "libsdl3_image", "glm")
 
     -- Assurer que les shaders sont compilés avant l'application

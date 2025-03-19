@@ -1,46 +1,10 @@
-#include <SDL3/SDL.h>
-#include <SDL3_image/SDL_image.h>
+#include <SDL_GPUAbstract.hpp>
 #include <chrono>
 #include <glm/glm.hpp>
 #include <iostream>
 #include <vector>
 
 static const char *BasePath = SDL_GetBasePath();
-
-SDL_Surface *LoadImage(const char *imageFilename, int desiredChannels)
-{
-	char fullPath[256];
-	SDL_Surface *result;
-	SDL_PixelFormat format;
-
-	SDL_snprintf(fullPath, sizeof(fullPath), "%s%s", BasePath, imageFilename);
-
-	result = SDL_LoadBMP(fullPath);
-	if (result == NULL)
-	{
-		SDL_Log("Failed to load BMP: %s", SDL_GetError());
-		return NULL;
-	}
-
-	if (desiredChannels == 4)
-	{
-		format = SDL_PIXELFORMAT_ABGR8888;
-	}
-	else
-	{
-		SDL_assert(!"Unexpected desiredChannels");
-		SDL_DestroySurface(result);
-		return NULL;
-	}
-	if (result->format != format)
-	{
-		SDL_Surface *next = SDL_ConvertSurface(result, format);
-		SDL_DestroySurface(result);
-		result = next;
-	}
-
-	return result;
-}
 
 SDL_GPUShader *LoadShader(
 	SDL_GPUDevice *device,
@@ -201,97 +165,9 @@ int main(int argc, char *argv[])
 	SDL_ReleaseGPUShader(device, vertexShader);
 	SDL_ReleaseGPUShader(device, fragmentShader);
 
-	SDL_Surface *spriteSurface = LoadImage("test.bmp", 4);
-	if (spriteSurface == NULL)
-	{
-		SDL_Log("Could not load image data!");
-		return -1;
-	}
+	SDL_GPUTextureSamplerBinding spriteSampler = CreateSamplerFromImage(device, "test.png");
 
-	SDL_GPUTransferBufferCreateInfo transferBufferInfo = {
-		.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-		.size = spriteSurface->w * spriteSurface->h * 4};
-
-	SDL_GPUTransferBuffer *textureTransferBuffer = SDL_CreateGPUTransferBuffer(device, &transferBufferInfo);
-	if (textureTransferBuffer == NULL)
-	{
-		SDL_Log("Could not create transfer buffer!");
-		return -1;
-	}
-
-	void *textureTransferPtr = SDL_MapGPUTransferBuffer(
-		device,
-		textureTransferBuffer,
-		false);
-
-	SDL_memcpy(textureTransferPtr, spriteSurface->pixels, spriteSurface->w * spriteSurface->h * 4);
-	SDL_UnmapGPUTransferBuffer(device, textureTransferBuffer);
-
-	SDL_GPUTextureCreateInfo textureCreateInfo = {};
-	textureCreateInfo.type = SDL_GPU_TEXTURETYPE_2D;
-	textureCreateInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-	textureCreateInfo.width = spriteSurface->w;
-	textureCreateInfo.height = spriteSurface->h;
-	textureCreateInfo.layer_count_or_depth = 1;
-	textureCreateInfo.num_levels = 1;
-	textureCreateInfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
-
-	SDL_GPUTexture *Texture = SDL_CreateGPUTexture(
-		device,
-		&textureCreateInfo);
-
-	SDL_GPUSamplerCreateInfo samplerCreateInfo = {};
-	samplerCreateInfo.min_filter = SDL_GPU_FILTER_NEAREST;
-	samplerCreateInfo.mag_filter = SDL_GPU_FILTER_NEAREST;
-	samplerCreateInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
-	samplerCreateInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-	samplerCreateInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-	samplerCreateInfo.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-
-	SDL_GPUSampler *Sampler = SDL_CreateGPUSampler(
-		device,
-		&samplerCreateInfo);
-
-	SDL_GPUTransferBufferCreateInfo uboTransferBufferCreateInfo = {};
-	uboTransferBufferCreateInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-	uboTransferBufferCreateInfo.size = sizeof(UBOData);
-
-	SDL_GPUTransferBuffer *uboTransferBuffer = SDL_CreateGPUTransferBuffer(
-		device,
-		&uboTransferBufferCreateInfo);
-
-	SDL_GPUBufferCreateInfo uboBufferCreateInfo = {};
-	uboBufferCreateInfo.usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
-	uboBufferCreateInfo.size = sizeof(UBOData);
-
-	SDL_GPUBuffer *UBOBuffer = SDL_CreateGPUBuffer(
-		device,
-		&uboBufferCreateInfo);
-
-	SDL_GPUCommandBuffer *uploadCmdBuf = SDL_AcquireGPUCommandBuffer(device);
-	SDL_GPUCopyPass *copyPass = SDL_BeginGPUCopyPass(uploadCmdBuf);
-
-	SDL_GPUTextureTransferInfo transferInfo = {};
-	transferInfo.transfer_buffer = textureTransferBuffer;
-	transferInfo.offset = 0;
-
-	SDL_GPUTextureRegion region = {};
-	region.texture = Texture;
-	region.w = spriteSurface->w;
-	region.h = spriteSurface->h;
-	region.d = 1;
-
-	SDL_UploadToGPUTexture(
-		copyPass,
-		&transferInfo,
-		&region,
-		false);
-
-	SDL_EndGPUCopyPass(copyPass);
-	SDL_SubmitGPUCommandBuffer(uploadCmdBuf);
-
-	SDL_DestroySurface(spriteSurface);
-	SDL_ReleaseGPUTransferBuffer(device, textureTransferBuffer);
+	UBO_Struct ubo = CreateUBO(device, sizeof(UBOData));
 
 	UBOData uboData;
 	bool running = true;
@@ -385,18 +261,18 @@ int main(int argc, char *argv[])
 		{
 			void *dataPtr = SDL_MapGPUTransferBuffer(
 				device,
-				uboTransferBuffer,
+				ubo.transferBuffer,
 				true);
 
-			SDL_UnmapGPUTransferBuffer(device, uboTransferBuffer);
+			SDL_UnmapGPUTransferBuffer(device, ubo.transferBuffer);
 
 			SDL_GPUCopyPass *copyPass = SDL_BeginGPUCopyPass(commandBuffer);
 			SDL_GPUTransferBufferLocation UploadUbotoGPUBuffer = {};
-			UploadUbotoGPUBuffer.transfer_buffer = uboTransferBuffer;
+			UploadUbotoGPUBuffer.transfer_buffer = ubo.transferBuffer;
 			UploadUbotoGPUBuffer.offset = 0;
 
 			SDL_GPUBufferRegion uboRegion = {};
-			uboRegion.buffer = UBOBuffer;
+			uboRegion.buffer = ubo.buffer;
 			uboRegion.offset = 0;
 			uboRegion.size = sizeof(UBOData);
 
@@ -421,14 +297,10 @@ int main(int argc, char *argv[])
 				NULL);
 			SDL_BindGPUGraphicsPipeline(renderPass, Pipeline);
 
-			SDL_GPUTextureSamplerBinding textureBinding = {};
-			textureBinding.texture = Texture;
-			textureBinding.sampler = Sampler;
-
 			SDL_BindGPUFragmentSamplers(
 				renderPass,
 				0,
-				&textureBinding,
+				&spriteSampler,
 				1);
 			SDL_PushGPUVertexUniformData(
 				commandBuffer,
@@ -447,10 +319,9 @@ int main(int argc, char *argv[])
 		SDL_SubmitGPUCommandBuffer(commandBuffer);
 	}
 
-	SDL_ReleaseGPUBuffer(device, UBOBuffer);
-	SDL_ReleaseGPUTransferBuffer(device, uboTransferBuffer);
-	SDL_ReleaseGPUTexture(device, Texture);
-	SDL_ReleaseGPUSampler(device, Sampler);
+	ubo.Destroy(device);
+	SDL_ReleaseGPUTexture(device, spriteSampler.texture);
+	SDL_ReleaseGPUSampler(device, spriteSampler.sampler);
 	SDL_ReleaseGPUGraphicsPipeline(device, Pipeline);
 	SDL_DestroyGPUDevice(device);
 	SDL_DestroyWindow(window);
