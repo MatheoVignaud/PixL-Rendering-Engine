@@ -31,6 +31,21 @@ SDL_GPUTextureSamplerBinding CreateSamplerFromImage(SDL_GPUDevice *device, std::
         surface = convertedSurface;
     }
 
+    // invert the image
+    SDL_LockSurface(surface);
+    for (int y = 0; y < surface->h / 2; y++)
+    {
+        for (int x = 0; x < surface->w; x++)
+        {
+            Uint32 *topPixel = (Uint32 *)((Uint8 *)surface->pixels + y * surface->pitch + x * 4);
+            Uint32 *bottomPixel = (Uint32 *)((Uint8 *)surface->pixels + (surface->h - y - 1) * surface->pitch + x * 4);
+            Uint32 temp = *topPixel;
+            *topPixel = *bottomPixel;
+            *bottomPixel = temp;
+        }
+    }
+    SDL_UnlockSurface(surface);
+
     // create a texture from the surface
     SDL_GPUTransferBufferCreateInfo transferBufferInfo = {
         .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
@@ -127,6 +142,60 @@ TransferBuffer_Struct CreateUBO(SDL_GPUDevice *device, size_t size)
     return {uboTransferBuffer, UBOBuffer};
 }
 
+VertexBuffer_Struct CreateVBO(SDL_GPUDevice *device, size_t size)
+{
+    SDL_GPUTransferBufferCreateInfo vboTransferBufferCreateInfo = {};
+    vboTransferBufferCreateInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    vboTransferBufferCreateInfo.size = size;
+
+    SDL_GPUTransferBuffer *vboTransferBuffer = SDL_CreateGPUTransferBuffer(
+        device,
+        &vboTransferBufferCreateInfo);
+
+    SDL_GPUBufferCreateInfo vboBufferCreateInfo = {};
+    vboBufferCreateInfo.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
+    vboBufferCreateInfo.size = size;
+
+    SDL_GPUBuffer *VBOBuffer = SDL_CreateGPUBuffer(
+        device,
+        &vboBufferCreateInfo);
+    SDL_UnmapGPUTransferBuffer(device, vboTransferBuffer);
+
+    VertexBuffer_Struct VBOBuffer_Struct = {};
+    VBOBuffer_Struct.transferBuffer = vboTransferBuffer;
+    VBOBuffer_Struct.buffer = VBOBuffer;
+    VBOBuffer_Struct.size = size;
+
+    return VBOBuffer_Struct;
+}
+
+IndexBuffer_Struct CreateEBO(SDL_GPUDevice *device, size_t size)
+{
+    SDL_GPUTransferBufferCreateInfo eboTransferBufferCreateInfo = {};
+    eboTransferBufferCreateInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    eboTransferBufferCreateInfo.size = size;
+
+    SDL_GPUTransferBuffer *eboTransferBuffer = SDL_CreateGPUTransferBuffer(
+        device,
+        &eboTransferBufferCreateInfo);
+
+    SDL_GPUBufferCreateInfo eboBufferCreateInfo = {};
+    eboBufferCreateInfo.usage = SDL_GPU_BUFFERUSAGE_INDEX;
+    eboBufferCreateInfo.size = size;
+
+    SDL_GPUBuffer *EBOBuffer = SDL_CreateGPUBuffer(
+        device,
+        &eboBufferCreateInfo);
+    SDL_UnmapGPUTransferBuffer(device, eboTransferBuffer);
+
+    IndexBuffer_Struct EBOBuffer_Struct = {};
+    EBOBuffer_Struct.transferBuffer = eboTransferBuffer;
+    EBOBuffer_Struct.buffer = EBOBuffer;
+    EBOBuffer_Struct.size = size;
+
+    return EBOBuffer_Struct;
+}
+
 SDL_GPUShader *LoadShader(SDL_GPUDevice *device, Shader_Struct *shader)
 {
     char fullPath[256];
@@ -168,7 +237,7 @@ SDL_GPUShader *LoadShader(SDL_GPUDevice *device, Shader_Struct *shader)
     return GPU_shader;
 }
 
-SDL_GPUGraphicsPipeline *CreatePipeline(SDL_GPUDevice *device, SDL_Window *window, Shader_Struct *vertexShader, Shader_Struct *fragmentShader)
+SDL_GPUGraphicsPipeline *CreatePipeline(SDL_GPUDevice *device, SDL_Window *window, Shader_Struct *vertexShader, Shader_Struct *fragmentShader, bool depthTest, SDL_GPUCompareOp compareOp, bool enable_depth_test, bool enable_depth_write)
 {
     if (vertexShader == NULL || fragmentShader == NULL)
     {
@@ -199,6 +268,19 @@ SDL_GPUGraphicsPipeline *CreatePipeline(SDL_GPUDevice *device, SDL_Window *windo
     SDL_GPUGraphicsPipelineTargetInfo pipeline_target_info = {};
     pipeline_target_info.num_color_targets = 1;
     pipeline_target_info.color_target_descriptions = &target_desc;
+    pipeline_target_info.has_depth_stencil_target = depthTest;
+
+    SDL_GPUDepthStencilState depth_stencil_state = {};
+
+    if (depthTest)
+    {
+        pipeline_target_info.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+        depth_stencil_state.enable_depth_test = enable_depth_test;
+        depth_stencil_state.enable_depth_write = enable_depth_write;
+        depth_stencil_state.enable_stencil_test = false;
+        depth_stencil_state.compare_op = compareOp;
+        depth_stencil_state.write_mask = 0xFF;
+    }
 
     SDL_GPUGraphicsPipelineCreateInfo pipelineCreateInfo = {};
     pipelineCreateInfo.target_info = pipeline_target_info;
@@ -213,6 +295,9 @@ SDL_GPUGraphicsPipeline *CreatePipeline(SDL_GPUDevice *device, SDL_Window *windo
         pipelineCreateInfo.vertex_input_state.num_vertex_buffers = vertexShader->vertexBuffers.size();
         pipelineCreateInfo.vertex_input_state.vertex_buffer_descriptions = vertexShader->vertexBuffers.data();
     }
+    pipelineCreateInfo.rasterizer_state = {};
+    pipelineCreateInfo.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
+    pipelineCreateInfo.depth_stencil_state = depth_stencil_state;
 
     SDL_GPUGraphicsPipeline *Pipeline = SDL_CreateGPUGraphicsPipeline(device, &pipelineCreateInfo);
     if (Pipeline == NULL)
@@ -225,4 +310,56 @@ SDL_GPUGraphicsPipeline *CreatePipeline(SDL_GPUDevice *device, SDL_Window *windo
     SDL_ReleaseGPUShader(device, fragmentShaderGPU);
 
     return Pipeline;
+}
+DepthBuffer_Struct *CreateDepthBuffer(SDL_GPUDevice *device, uint32_t width, uint32_t height)
+{
+    SDL_GPUTextureCreateInfo depthBufferCreateInfo = {};
+    depthBufferCreateInfo.type = SDL_GPU_TEXTURETYPE_2D;
+    depthBufferCreateInfo.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+    depthBufferCreateInfo.width = width;
+    depthBufferCreateInfo.height = height;
+    depthBufferCreateInfo.layer_count_or_depth = 1;
+    depthBufferCreateInfo.num_levels = 1;
+    depthBufferCreateInfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
+
+    DepthBuffer_Struct *DepthBuffer = new DepthBuffer_Struct();
+    DepthBuffer->texture = SDL_CreateGPUTexture(
+        device,
+        &depthBufferCreateInfo);
+
+    DepthBuffer->depthStencilTargetInfoClear = {};
+    DepthBuffer->depthStencilTargetInfoClear.texture = DepthBuffer->texture;
+    DepthBuffer->depthStencilTargetInfoClear.clear_depth = 1.0f;
+    DepthBuffer->depthStencilTargetInfoClear.load_op = SDL_GPU_LOADOP_CLEAR;
+    DepthBuffer->depthStencilTargetInfoClear.store_op = SDL_GPU_STOREOP_STORE;
+    DepthBuffer->depthStencilTargetInfoClear.stencil_load_op = SDL_GPU_LOADOP_CLEAR;
+    DepthBuffer->depthStencilTargetInfoClear.stencil_store_op = SDL_GPU_STOREOP_STORE;
+    DepthBuffer->depthStencilTargetInfoClear.cycle = true;
+    DepthBuffer->depthStencilTargetInfoClear.clear_stencil = 0;
+
+    DepthBuffer->depthStencilTargetInfoLoad = DepthBuffer->depthStencilTargetInfoClear;
+    DepthBuffer->depthStencilTargetInfoLoad.load_op = SDL_GPU_LOADOP_LOAD;
+    DepthBuffer->depthStencilTargetInfoLoad.stencil_load_op = SDL_GPU_LOADOP_LOAD;
+    DepthBuffer->depthStencilTargetInfoLoad.cycle = false;
+
+    DepthBuffer->depthStencilTargetInfoLoadReadOnly = DepthBuffer->depthStencilTargetInfoLoad;
+    DepthBuffer->depthStencilTargetInfoLoadReadOnly.store_op = SDL_GPU_STOREOP_DONT_CARE;
+    DepthBuffer->depthStencilTargetInfoLoadReadOnly.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
+
+    DepthBuffer->sampler = {};
+    DepthBuffer->sampler.texture = DepthBuffer->texture;
+
+    SDL_GPUSamplerCreateInfo samplerCreateInfo = {};
+    samplerCreateInfo.min_filter = SDL_GPU_FILTER_NEAREST;
+    samplerCreateInfo.mag_filter = SDL_GPU_FILTER_NEAREST;
+    samplerCreateInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+    samplerCreateInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    samplerCreateInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    samplerCreateInfo.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+
+    DepthBuffer->sampler.sampler = SDL_CreateGPUSampler(
+        device,
+        &samplerCreateInfo);
+
+    return DepthBuffer;
 };
