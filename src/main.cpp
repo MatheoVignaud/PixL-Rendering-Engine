@@ -85,6 +85,18 @@ Shader_Struct FragmentShader2 = {
 	0,
 	0};
 
+void camDir_callback(SDL_Event event, float &pitch, float &yaw)
+{
+	const float camSensitivity = 0.2f;
+	if (event.motion.y > 0 && event.motion.y < 600 && event.motion.yrel > -100 && event.motion.yrel < 100)
+
+		pitch += event.motion.yrel * camSensitivity;
+
+	if (event.motion.x > 0 && event.motion.x < 800 && event.motion.xrel > -100 && event.motion.xrel < 100)
+
+		yaw += event.motion.xrel * camSensitivity;
+};
+
 int main(int argc, char *argv[])
 {
 	SDL_SetHint(SDL_HINT_RENDER_VULKAN_DEBUG, "1");
@@ -180,24 +192,55 @@ int main(int argc, char *argv[])
 	MVP mvp;
 	mvp.model = glm::rotate(mvp.model, time * glm::radians(50.0f), glm::vec3(0.5f, 1.0f, 0.0f));
 	mvp.view = glm::translate(mvp.view, glm::vec3(0.0f, 0.0f, -3.0f));
-	mvp.projection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
+	mvp.projection = glm::perspective(glm::radians(50.0f), aspect, 0.1f, 100.0f);
 	TransferBuffer_Struct ubo = CreateUBO(device, sizeof(MVP));
 
-	MVP mvp2 = mvp;
-	mvp2.model = glm::translate(mvp2.model, glm::vec3(-1.3f, 1.0f, -1.5f));
-
 	DepthBuffer_Struct *depthBuffer = CreateDepthBuffer(device, 800, 600);
+
+	glm::vec3 cubePositions[] = {
+		glm::vec3(2.0f, 5.0f, -15.0f),
+		glm::vec3(-1.5f, -2.2f, -2.5f),
+		glm::vec3(-3.8f, -2.0f, -12.3f),
+		glm::vec3(2.4f, -0.4f, -3.5f),
+		glm::vec3(-1.7f, 3.0f, -7.5f),
+		glm::vec3(1.3f, -2.0f, -2.5f),
+		glm::vec3(1.5f, 2.0f, -2.5f),
+		glm::vec3(1.5f, 0.2f, -1.5f),
+		glm::vec3(-1.3f, 1.0f, -1.5f)};
+
+	// camera
+	glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+	glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, 1.0f);
+	glm::vec3 cameraUp = glm::vec3(0.0f, -1.0f, 0.0f);
+	const float cameraSpeed = 0.005f;
+
+	float lastX = 400, lastY = 300;
+	float yaw = -90;
+	float pitch = -180;
 
 	bool running = true;
 	bool showDepthBuffer = false;
 	SDL_Event event;
+	auto delta_time_chrono = std::chrono::high_resolution_clock::now();
+
+	bool first_frame = true;
+
+	int first_frames_counter = 200;
+
 	while (running)
 	{
+		float time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count() / 1000.0f;
+		float angle = 20.0f * time;
 
-		float time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start).count() / 10000.0f;
+		glm::mat4 model = glm::mat4(1.0f);
 
-		mvp.model = glm::rotate(mvp.model, time * glm::radians(50.0f), glm::vec3(0.5f, 1.0f, 0.0f));
-		mvp2.model = glm::rotate(mvp2.model, time * glm::radians(50.0f), glm::vec3(-1.3f, 1.0f, -1.5f));
+		float delta_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - delta_time_chrono).count();
+		delta_time_chrono = std::chrono::high_resolution_clock::now();
+
+		float cameraSpeedDelta = cameraSpeed * delta_time;
+
+		float xoffset = 0, yoffset = 0;
+
 		while (SDL_PollEvent(&event))
 		{
 			if (event.type == SDL_EVENT_QUIT)
@@ -210,8 +253,39 @@ int main(int argc, char *argv[])
 				{
 					showDepthBuffer = !showDepthBuffer;
 				}
+				if (event.key.key == SDLK_UP)
+				{
+					cameraPos -= cameraSpeedDelta * cameraFront;
+				}
+				if (event.key.key == SDLK_DOWN)
+				{
+					cameraPos += cameraSpeedDelta * cameraFront;
+				}
+				if (event.key.key == SDLK_LEFT)
+				{
+					cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeedDelta;
+				}
+				if (event.key.key == SDLK_RIGHT)
+				{
+					cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeedDelta;
+				}
+			}
+			if ((event.motion.yrel || event.motion.yrel) && !first_frame)
+			{
+				camDir_callback(event, pitch, yaw);
 			}
 		}
+
+		std::cout << "yaw: " << yaw << " pitch: " << pitch << std::endl;
+
+		glm::vec3 direction;
+		direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+		direction.y = sin(glm::radians(pitch));
+		direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+
+		cameraFront = glm::normalize(direction);
+
+		mvp.view = glm::lookAt(cameraPos, cameraPos - cameraFront, cameraUp);
 
 		SDL_GPUCommandBuffer *commandBuffer = SDL_AcquireGPUCommandBuffer(device);
 		if (commandBuffer == NULL)
@@ -241,6 +315,10 @@ int main(int argc, char *argv[])
 				&colorTargetInfo,
 				1,
 				&depthBuffer->depthStencilTargetInfoClear);
+
+			mvp.model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
+			mvp.model = glm::rotate(mvp.model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+
 			SDL_BindGPUGraphicsPipeline(renderPass, Pipeline);
 			vertexBuffer.Bind(renderPass, 0);
 			SDL_BindGPUFragmentSamplers(renderPass, 0, &spriteSampler, 1);
@@ -261,24 +339,30 @@ int main(int argc, char *argv[])
 			colorTargetInfo.load_op = SDL_GPU_LOADOP_LOAD;
 			colorTargetInfo.store_op = SDL_GPU_STOREOP_STORE;
 
-			renderPass = SDL_BeginGPURenderPass(
-				commandBuffer,
-				&colorTargetInfo,
-				1,
-				&depthBuffer->depthStencilTargetInfoLoad);
-			SDL_BindGPUGraphicsPipeline(renderPass, Pipeline);
-			vertexBuffer.Bind(renderPass, 0);
-			SDL_BindGPUFragmentSamplers(renderPass, 0, &spriteSampler, 1);
-			SDL_BindGPUFragmentSamplers(renderPass, 1, &ravioli, 1);
-			SDL_PushGPUVertexUniformData(commandBuffer, 0, &mvp2, sizeof(MVP));
-			SDL_DrawGPUPrimitives(
-				renderPass,
-				36,
-				1,
-				0,
-				0);
+			for (int i = 0; i < 9; i++)
+			{
+				mvp.model = glm::translate(model, cubePositions[i]);
+				mvp.model = glm::rotate(mvp.model, glm::radians(angle + i * 4), glm::vec3(1.0f, 0.3f, 0.5f));
 
-			SDL_EndGPURenderPass(renderPass);
+				renderPass = SDL_BeginGPURenderPass(
+					commandBuffer,
+					&colorTargetInfo,
+					1,
+					&depthBuffer->depthStencilTargetInfoLoad);
+				SDL_BindGPUGraphicsPipeline(renderPass, Pipeline);
+				vertexBuffer.Bind(renderPass, 0);
+				SDL_BindGPUFragmentSamplers(renderPass, 0, &spriteSampler, 1);
+				SDL_BindGPUFragmentSamplers(renderPass, 1, &ravioli, 1);
+				SDL_PushGPUVertexUniformData(commandBuffer, 0, &mvp, sizeof(MVP));
+				SDL_DrawGPUPrimitives(
+					renderPass,
+					36,
+					1,
+					0,
+					0);
+
+				SDL_EndGPURenderPass(renderPass);
+			}
 
 			if (showDepthBuffer)
 			{
@@ -300,6 +384,15 @@ int main(int argc, char *argv[])
 			}
 		}
 		SDL_SubmitGPUCommandBuffer(commandBuffer);
+
+		if (first_frames_counter < 0)
+		{
+			first_frames_counter--;
+		}
+		else
+		{
+			first_frame = false;
+		}
 	}
 
 	ubo.Destroy(device);
