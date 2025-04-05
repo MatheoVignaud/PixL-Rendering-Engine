@@ -1,7 +1,6 @@
 #pragma once
 
-#include <SDL3/SDL.h>
-#include <SDL3_Image/SDL_image.h>
+#include <SDL_GPUAbstract.hpp>
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -9,31 +8,31 @@
 #include <stdio.h>
 #include <vector>
 
-// prototypes
-class PixL_Renderer;
-class PixL_Drawable;
-class PixL_Texture;
-class PixL_Tilemap;
-struct PixL_Draw_Property;
-struct PixL_Draw_Command;
+#define DEFAULT_NAME "default"
 
-// enums
-enum PixelDataFormat
+struct Named_Pipeline
 {
-    // 8 bit per channel
-    PIXL_PIXEL_FORMAT_RGB,
-    PIXL_PIXEL_FORMAT_BGR,
-    PIXL_PIXEL_FORMAT_RGBA,
-    PIXL_PIXEL_FORMAT_BGRA,
-    PIXL_PIXEL_FORMAT_ARGB,
-    PIXL_PIXEL_FORMAT_ABGR,
+    std::string name;
+    SDL_GPUGraphicsPipeline *pipeline;
+    int vertexShader_UniformBuffer_Count = 0;
+    int vertexShader_StorageBuffer_Count = 0;
+    int fragmentShader_Sampler_Count = 0;
+    int fragmentShader_UniformBuffer_Count = 0;
+    int fragmentShader_StorageBuffer_Count = 0;
+    int fragmentShader_StorageTexture_Count = 0;
+    bool needDepthBuffer = false;
 };
 
-enum PixL_DrawableType
+struct Named_DepthBuffer
 {
-    PIXL_DRAWABLE_NONE,
-    PIXL_DRAWABLE_TEXTURE,
-    PIXL_DRAWABLE_TILEMAP,
+    std::string name;
+    DepthBuffer_Struct depthBuffer;
+};
+
+struct Named_Texture
+{
+    std::string name;
+    SDL_GPUTextureSamplerBinding sampler;
 };
 
 // Flags for PixL_Renderer_Init
@@ -57,157 +56,58 @@ protected:
     ~PixL_Renderer();
     static PixL_Renderer *_instance;
 
+    int window_width = 0;
+    int window_height = 0;
+
     // flags
     uint32_t _flags;
     SDL_Window *_window = nullptr;
-    SDL_Renderer *_renderer = nullptr;
-    std::vector<PixL_Draw_Command *> _drawables = std::vector<PixL_Draw_Command *>();
+    SDL_GPUDevice *_device = nullptr;
 
-    int Draw();
-    int Present();
-    // draw functions for each mode
-    int DrawQueueMode();
-    int DrawPlanMode();
+    SDL_GPUCommandBuffer *commandBuffer = nullptr;
+    SDL_GPUTexture *swapchainTexture;
 
-    int draw_texture(PixL_Texture *texture, PixL_Draw_Property &property, int screenw, int screenh);
-    int draw_tilemap(PixL_Tilemap *tilemap, int screenw, int screenh);
-    int draw_mode7(PixL_Texture *texture, PixL_Draw_Property &property, int screenw, int screenh);
+    bool drawing = false;
 
-    // effects functions
-    bool mods_texture(PixL_Texture *texture, PixL_Draw_Property &property);
-    SDL_Texture *mosaic(PixL_Texture *texture, PixL_Draw_Property &property, int screenw, int screenh);
+    uint32_t _drawCalls = 0;
+    bool depthBufferClear = false;
+
+    std::vector<Named_Pipeline> _pipelines;
+    std::vector<Named_DepthBuffer> _depthBuffers;
+    std::vector<Named_Texture> _textures;
 
     // friend functions
-
     friend int PixL_Renderer_Init(uint32_t flags);
     friend int PixL_Renderer_Quit();
-    friend SDL_Window *CreateWindow(const char *title, int x, int y, int w, int h, Uint32 flags);
+    friend SDL_Window *CreateWindow(const char *title, int w, int h, Uint32 flags);
     friend SDL_Window *GetWindow();
-    friend PixL_Texture *CreateTexture(const char *path);
-    friend PixL_Texture *CreateTexture(std::vector<uint8_t> &data, int width, int height, PixelDataFormat format);
-    friend int PixL_Draw();
-    friend int PixL_Present();
-    friend uint16_t PixL_AddDrawable(PixL_Drawable *drawable, PixL_Draw_Property property);
-    friend void PixL_RemoveDrawable(uint16_t id);
-    friend PixL_Draw_Property *PixL_GetDrawableProperty(uint16_t id);
-};
 
-// Drawables objects classes
+    friend bool PixL_Draw(
+        std::string PipelineName,
+        std::string RenderTextureName, // "" for default swapchain texture , texture need to support render target
+        std::string DepthBufferName,   // "" for default depth buffer
+        int instanceCount,
 
-struct PixL_Draw_Property
-{
-    // plan of the texture, bigger plan will be rendered on top of smaller plan. Only used in plan mode
-    uint16_t _plan = 0;
+        // vertex
+        int vertexCount,
+        VertexBuffer_Struct *vertexBuffer,
+        std::pair<void *, size_t> vertexBufferUBOData,
+        TransferBuffer_Struct *vertexBufferSSBO,
 
-    // center of the texture in the window, between 0 and 1 (0.5 is the center of the window), bigger than 1 will make the center of the texture outside of the window
-    float x = 0.5;
-    float y = 0.5;
+        // fragment
+        std::vector<std::string> fragmentBufferSamplerNames, // bind samplers to the fragment shader , order is important
+        std::pair<void *, size_t> fragmentBufferUBOData,
+        TransferBuffer_Struct *fragmentBufferSSBO);
+    friend bool PixL_StartDraw();
+    friend void PixL_SwapBuffers();
+    friend bool PixL_CreatePipeline(std::string name, Shader_Struct *vertexShader, Shader_Struct *fragmentShader, bool depthTest, SDL_GPUCompareOp compareOp, bool enable_depth_test, bool enable_depth_write);
+    friend bool PixL_DestroyPipeline(std::string name);
+    friend bool PixL_CreateDepthBuffer(std::string name);
+    friend bool PixL_DestroyDepthBuffer(std::string name);
+    friend bool PixL_CreateTexture(std::string name, std::string imagePath);
 
-    // width and height of the texture, between 0 and 1 (1 is the full size of the window), bigger than 1 will make the texture bigger than the window
-    float w = 1;
-    float h = 1;
-
-    // src rect of the texture, between 0 and 1 (1 is the full size of the texture)
-    float src_x = 0.5;
-    float src_y = 0.5;
-    float src_w = 1;
-    float src_h = 1;
-
-    // angle of the texture in degrees, rotation is clockwise and the center of rotation is the center of the texture
-    float rot = 0;
-    float rot_center_x = 0.5;
-    float rot_center_y = 0.5;
-
-    // flip of the texture
-    bool flip_h = false;
-    bool flip_v = false;
-
-    // color modulation
-    uint8_t r = 255;
-    uint8_t g = 255;
-    uint8_t b = 255;
-    uint8_t a = 255;
-
-    // mode7 properties
-    bool mode7 = false;
-    bool mode7_repeat = false;
-    float mode7_scale = 1.0f;
-
-    // in 2D based (so y and z are inverted compared to 3D)
-    float mode7_cam_x = 0.5f;
-    float mode7_cam_y = 0.5f;
-    float mode7_cam_z = 1.0f;
-
-    // mode7 rotation in degrees (x, y, z) clockwise
-    float mode7_cam_rot_x = 0.0f;
-    float mode7_cam_rot_y = 0.0f;
-    float mode7_cam_rot_z = 0.0f;
-
-    float mode7_focal = 1.0f;
-
-    // mosaic properties
-    uint8_t mosaic_mode = 0; // 0: no mosaic, 1-255: mosaic level (1 is the smallest level)
-};
-
-struct PixL_Draw_Command
-{
-    uint16_t id;
-    PixL_Draw_Property property;
-    PixL_Drawable *drawable;
-};
-
-class PixL_Drawable
-{
-protected:
-    virtual ~PixL_Drawable() = default;
-    virtual PixL_DrawableType getType() const = 0;
-
-    friend PixL_Texture *CreateTexture(const char *path);
-    friend PixL_Texture *CreateTexture(std::vector<uint8_t> &data, int width, int height, PixelDataFormat format);
-    friend class PixL_Renderer;
-    friend class PixL_Texture_Manager;
-};
-
-class PixL_Texture : public PixL_Drawable
-{
-protected:
-    PixL_DrawableType getType() const override { return PixL_DrawableType::PIXL_DRAWABLE_TEXTURE; }
-    PixL_Texture();
-    ~PixL_Texture();
-
-    uint16_t _width;
-    uint16_t _height;
-    SDL_Texture *_texture = nullptr;
-    SDL_Texture *_texture_mod = nullptr;
-    SDL_Surface *_surface = nullptr; // pour les effets gérés par cpu
-
-    // effects parameters
-    uint8_t _mosaic_mode = 0;
-
-    friend PixL_Texture *CreateTexture(const char *path);
-    friend PixL_Texture *CreateTexture(std::vector<uint8_t> &data, int width, int height, PixelDataFormat format);
-    friend class PixL_Renderer;
-    friend class PixL_Texture_Manager;
-};
-
-class PixL_Tilemap : public PixL_Drawable
-{
-protected:
-    uint16_t _id;
-    SDL_Texture *_texture = nullptr;
-    uint16_t _GetMapHeight();
-    uint16_t _GetMapWidth();
-    void _SetMapHeight(uint16_t height);
-    void _SetMapWidth(uint16_t width);
-    std::vector<uint16_t> *_GetTilemap();
-
-    std::vector<uint16_t> _map;
-    uint16_t _map_width;
-    uint16_t _map_height;
-    friend PixL_Texture *CreateTexture(const char *path);
-    friend PixL_Texture *CreateTexture(std::vector<uint8_t> &data, int width, int height, PixelDataFormat format);
-    friend class PixL_Renderer;
-    friend class PixL_Texture_Manager;
+    // callbacks
+    friend void PixL_Callback_WindowResized();
 };
 
 // function prototypes
@@ -217,20 +117,33 @@ int PixL_Renderer_Init(uint32_t flags);
 int PixL_Renderer_Quit();
 
 // Window functions
-SDL_Window *CreateWindow(const char *title, int x, int y, int w, int h, Uint32 flags);
+SDL_Window *CreateWindow(const char *title, int w, int h, Uint32 flags);
 SDL_Window *GetWindow();
 
-// Texture functions
-PixL_Texture *CreateTexture(const char *path);
-PixL_Texture *CreateTexture(std::vector<uint8_t> &data, int width, int height, PixelDataFormat format);
+bool PixL_Draw(
+    std::string PipelineName,
+    std::string RenderTextureName, // "" for default swapchain texture , texture need to support render target
+    std::string DepthBufferName,   // "" for default depth buffer
+    int instanceCount,
 
-// Drawable functions
-uint16_t PixL_AddDrawable(PixL_Drawable *drawable, PixL_Draw_Property property);
-void PixL_RemoveDrawable(uint16_t id);
-PixL_Draw_Property *PixL_GetDrawableProperty(uint16_t id);
+    // vertex
+    int vertexCount,
+    VertexBuffer_Struct *vertexBuffer,
+    std::pair<void *, size_t> vertexBufferUBOData,
+    TransferBuffer_Struct *vertexBufferSSBO,
 
-// Tilemap functions
+    // fragment
+    std::vector<std::string> fragmentBufferSamplerNames, // bind samplers to the fragment shader , order is important
+    std::pair<void *, size_t> fragmentBufferUBOData,
+    TransferBuffer_Struct *fragmentBufferSSBO);
 
-// Draw functions
-int PixL_Draw();
-int PixL_Present();
+bool PixL_StartDraw();
+void PixL_SwapBuffers();
+bool PixL_CreatePipeline(std::string name, Shader_Struct *vertexShader, Shader_Struct *fragmentShader, bool depthTest = false, SDL_GPUCompareOp compareOp = SDL_GPU_COMPAREOP_LESS, bool enable_depth_test = true, bool enable_depth_write = true);
+bool PixL_DestroyPipeline(std::string name);
+bool PixL_CreateDepthBuffer(std::string name);
+bool PixL_DestroyDepthBuffer(std::string name);
+bool PixL_CreateTexture(std::string name, std::string imagePath);
+
+// callbacks
+void PixL_Callback_WindowResized();
