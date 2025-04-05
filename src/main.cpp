@@ -1,16 +1,12 @@
 #include <SDL_GPUAbstract.hpp>
+#include <camera.hpp>
 #include <chrono>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
+#include <model.hpp>
 #include <vector>
-
-struct Vertex
-{
-	glm::vec3 position;
-	glm::u8vec4 color;
-};
 
 /*struct UBOData
 {
@@ -44,14 +40,19 @@ Shader_Struct VertexShader = {
 		(SDL_GPUVertexAttribute){
 			.location = 1,
 			.buffer_slot = 0,
-			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
 			.offset = sizeof(float) * 3,
 		},
-	},
+		(SDL_GPUVertexAttribute){
+			.location = 2,
+			.buffer_slot = 0,
+			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+			.offset = sizeof(float) * 6,
+		}},
 	.vertexBuffers = {
 		(SDL_GPUVertexBufferDescription){
 			.slot = 0,
-			.pitch = sizeof(float) * 5,
+			.pitch = sizeof(float) * 8,
 			.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
 			.instance_step_rate = 0,
 		},
@@ -63,7 +64,7 @@ Shader_Struct FragmentShader = {
 	"SolidColor.frag",
 	SDL_GPU_SHADERSTAGE_FRAGMENT,
 	2,
-	0,
+	1,
 	0,
 	0};
 
@@ -82,6 +83,14 @@ Shader_Struct FragmentShader2 = {
 	SDL_GPU_SHADERSTAGE_FRAGMENT,
 	1,
 	0,
+	0,
+	0};
+
+Shader_Struct LightFragmentShader = {
+	"Light.frag",
+	SDL_GPU_SHADERSTAGE_FRAGMENT,
+	0,
+	1,
 	0,
 	0};
 
@@ -125,74 +134,69 @@ int main(int argc, char *argv[])
 	std::cout << SDL_GetGPUDeviceDriver(device) << std::endl;
 
 	SDL_GPUGraphicsPipeline *Pipeline = CreatePipeline(device, window, &VertexShader, &FragmentShader, true);
+	SDL_GPUGraphicsPipeline *LightPipeline = CreatePipeline(device, window, &VertexShader, &LightFragmentShader, true);
 	SDL_GPUGraphicsPipeline *PipelineZBufferViwer = CreatePipeline(device, window, &VertexShader2, &FragmentShader2, false);
 
-	SDL_GPUTextureSamplerBinding spriteSampler = CreateSamplerFromImage(device, "test.bmp");
-	SDL_GPUTextureSamplerBinding ravioli = CreateSamplerFromImage(device, "ravioli_atlas.bmp");
+	SDL_GPUTextureSamplerBinding spriteSampler = CreateSamplerFromImage(device, "test.png");
+	SDL_GPUTextureSamplerBinding specular = CreateSamplerFromImage(device, "test_specular.png");
 
 	float vertices[] = {
-		-0.5f, -0.5f, -0.5f, 0.0f, 0.0f,
-		0.5f, -0.5f, -0.5f, 1.0f, 0.0f,
-		0.5f, 0.5f, -0.5f, 1.0f, 1.0f,
-		0.5f, 0.5f, -0.5f, 1.0f, 1.0f,
-		-0.5f, 0.5f, -0.5f, 0.0f, 1.0f,
-		-0.5f, -0.5f, -0.5f, 0.0f, 0.0f,
+		-0.5f, -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f,
+		0.5f, -0.5f, -0.5f, 1.0f, 0.0f, 0.0f, 0.0f, -1.0f,
+		0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f, 0.0f, -1.0f,
+		0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f, 0.0f, -1.0f,
+		-0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, -1.0f,
+		-0.5f, -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f,
 
-		-0.5f, -0.5f, 0.5f, 0.0f, 0.0f,
-		0.5f, -0.5f, 0.5f, 1.0f, 0.0f,
-		0.5f, 0.5f, 0.5f, 1.0f, 1.0f,
-		0.5f, 0.5f, 0.5f, 1.0f, 1.0f,
-		-0.5f, 0.5f, 0.5f, 0.0f, 1.0f,
-		-0.5f, -0.5f, 0.5f, 0.0f, 0.0f,
+		-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+		0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+		0.5f, 0.5f, 0.5f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+		0.5f, 0.5f, 0.5f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+		-0.5f, 0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+		-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
 
-		-0.5f, 0.5f, 0.5f, 1.0f, 0.0f,
-		-0.5f, 0.5f, -0.5f, 1.0f, 1.0f,
-		-0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-		-0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-		-0.5f, -0.5f, 0.5f, 0.0f, 0.0f,
-		-0.5f, 0.5f, 0.5f, 1.0f, 0.0f,
+		-0.5f, 0.5f, 0.5f, 1.0f, 0.0f, -1.0f, 0.0f, 0.0f,
+		-0.5f, 0.5f, -0.5f, 1.0f, 1.0f, -1.0f, 0.0f, 0.0f,
+		-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, -1.0f, 0.0f, 0.0f,
+		-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, -1.0f, 0.0f, 0.0f,
+		-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f,
+		-0.5f, 0.5f, 0.5f, 1.0f, 0.0f, -1.0f, 0.0f, 0.0f,
 
-		0.5f, 0.5f, 0.5f, 1.0f, 0.0f,
-		0.5f, 0.5f, -0.5f, 1.0f, 1.0f,
-		0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-		0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-		0.5f, -0.5f, 0.5f, 0.0f, 0.0f,
-		0.5f, 0.5f, 0.5f, 1.0f, 0.0f,
+		0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+		0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+		0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+		0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+		0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+		0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f,
 
-		-0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-		0.5f, -0.5f, -0.5f, 1.0f, 1.0f,
-		0.5f, -0.5f, 0.5f, 1.0f, 0.0f,
-		0.5f, -0.5f, 0.5f, 1.0f, 0.0f,
-		-0.5f, -0.5f, 0.5f, 0.0f, 0.0f,
-		-0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
+		-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, -1.0f, 0.0f,
+		0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 0.0f, -1.0f, 0.0f,
+		0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f, -1.0f, 0.0f,
+		0.5f, -0.5f, 0.5f, 1.0f, 0.0f, 0.0f, -1.0f, 0.0f,
+		-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f,
+		-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, -1.0f, 0.0f,
 
-		-0.5f, 0.5f, -0.5f, 0.0f, 1.0f,
-		0.5f, 0.5f, -0.5f, 1.0f, 1.0f,
-		0.5f, 0.5f, 0.5f, 1.0f, 0.0f,
-		0.5f, 0.5f, 0.5f, 1.0f, 0.0f,
-		-0.5f, 0.5f, 0.5f, 0.0f, 0.0f,
-		-0.5f, 0.5f, -0.5f, 0.0f, 1.0f};
+		-0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+		0.5f, 0.5f, -0.5f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+		0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+		0.5f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+		-0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+		-0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f};
 
 	VertexBuffer_Struct vertexBuffer = CreateVBO(device, sizeof(vertices));
 	vertexBuffer.Update(device, vertices, sizeof(vertices));
 	vertexBuffer.Upload(device);
 
-	struct MVP
-	{
-		glm::mat4 model = glm::mat4(1.0f);
-		glm::mat4 view = glm::mat4(1.0f);
-		glm::mat4 projection = glm::mat4(1.0f);
-	};
-
 	float aspect = 800.0f / 600.0f;
 	auto start = std::chrono::high_resolution_clock::now();
 	// get seconds since epoch
 	float time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count() / 1000.0f;
+	float FOV = 50.0f;
 
 	MVP mvp;
 	mvp.model = glm::rotate(mvp.model, time * glm::radians(50.0f), glm::vec3(0.5f, 1.0f, 0.0f));
 	mvp.view = glm::translate(mvp.view, glm::vec3(0.0f, 0.0f, -3.0f));
-	mvp.projection = glm::perspective(glm::radians(50.0f), aspect, 0.1f, 100.0f);
+	mvp.projection = glm::perspective(glm::radians(FOV), aspect, 0.1f, 100.0f);
 	TransferBuffer_Struct ubo = CreateUBO(device, sizeof(MVP));
 
 	DepthBuffer_Struct *depthBuffer = CreateDepthBuffer(device, 800, 600);
@@ -223,9 +227,24 @@ int main(int argc, char *argv[])
 	SDL_Event event;
 	auto delta_time_chrono = std::chrono::high_resolution_clock::now();
 
+	// Light
+
+	LightUBO lightUBO;
+	lightUBO.lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
+	lightUBO.lightPos = glm::vec3(-1.2f, -1.0f, -2.0f);
+	lightUBO.viewPos = cameraPos;
+	lightUBO.constant = 1.0f;
+	lightUBO.linear = 0.09f;
+	lightUBO.quadratic = 0.032f;
+	lightUBO.cutoff = glm::cos(glm::radians(12.5f));
+	lightUBO.outerCutoff = glm::cos(glm::radians(17.5f));
+	TransferBuffer_Struct lightColorBuffer = CreateUBO(device, sizeof(lightUBO));
+
 	bool first_frame = true;
 
 	int first_frames_counter = 200;
+
+	Model loadedModel(device, "Survival_BackPack_2.fbx");
 
 	while (running)
 	{
@@ -274,9 +293,19 @@ int main(int argc, char *argv[])
 			{
 				camDir_callback(event, pitch, yaw);
 			}
+			if (event.wheel.y && !first_frame)
+			{
+				if (event.wheel.y == 1 || event.wheel.y == -1)
+				{
+					if (FOV >= 1.0f && FOV <= 90.0f)
+						FOV -= event.wheel.y;
+					if (FOV <= 1.0f)
+						FOV = 1.0f;
+					if (FOV >= 90.0f)
+						FOV = 90.0f;
+				}
+			}
 		}
-
-		std::cout << "yaw: " << yaw << " pitch: " << pitch << std::endl;
 
 		glm::vec3 direction;
 		direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
@@ -286,6 +315,11 @@ int main(int argc, char *argv[])
 		cameraFront = glm::normalize(direction);
 
 		mvp.view = glm::lookAt(cameraPos, cameraPos - cameraFront, cameraUp);
+		mvp.projection = glm::perspective(glm::radians(FOV), aspect, 0.1f, 100.0f);
+
+		lightUBO.viewPos = cameraPos;
+		lightUBO.lightPos = cameraPos;
+		lightUBO.lightDir = cameraFront;
 
 		SDL_GPUCommandBuffer *commandBuffer = SDL_AcquireGPUCommandBuffer(device);
 		if (commandBuffer == NULL)
@@ -310,28 +344,11 @@ int main(int argc, char *argv[])
 			colorTargetInfo.load_op = SDL_GPU_LOADOP_CLEAR;
 			colorTargetInfo.store_op = SDL_GPU_STOREOP_STORE;
 
-			SDL_GPURenderPass *renderPass = SDL_BeginGPURenderPass(
-				commandBuffer,
-				&colorTargetInfo,
-				1,
-				&depthBuffer->depthStencilTargetInfoClear);
-
 			mvp.model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
 			mvp.model = glm::rotate(mvp.model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+			mvp.inverseModel = glm::inverse(mvp.model);
 
-			SDL_BindGPUGraphicsPipeline(renderPass, Pipeline);
-			vertexBuffer.Bind(renderPass, 0);
-			SDL_BindGPUFragmentSamplers(renderPass, 0, &spriteSampler, 1);
-			SDL_BindGPUFragmentSamplers(renderPass, 1, &ravioli, 1);
-			SDL_PushGPUVertexUniformData(commandBuffer, 0, &mvp, sizeof(MVP));
-			SDL_DrawGPUPrimitives(
-				renderPass,
-				36,
-				1,
-				0,
-				0);
-
-			SDL_EndGPURenderPass(renderPass);
+			loadedModel.Draw(commandBuffer, depthBuffer, swapchainTexture, Pipeline, mvp, lightUBO);
 
 			colorTargetInfo = {0};
 			colorTargetInfo.texture = swapchainTexture;
@@ -339,10 +356,13 @@ int main(int argc, char *argv[])
 			colorTargetInfo.load_op = SDL_GPU_LOADOP_LOAD;
 			colorTargetInfo.store_op = SDL_GPU_STOREOP_STORE;
 
+			SDL_GPURenderPass *renderPass = nullptr;
+
 			for (int i = 0; i < 9; i++)
 			{
 				mvp.model = glm::translate(model, cubePositions[i]);
 				mvp.model = glm::rotate(mvp.model, glm::radians(angle + i * 4), glm::vec3(1.0f, 0.3f, 0.5f));
+				mvp.inverseModel = glm::inverse(mvp.model);
 
 				renderPass = SDL_BeginGPURenderPass(
 					commandBuffer,
@@ -352,8 +372,9 @@ int main(int argc, char *argv[])
 				SDL_BindGPUGraphicsPipeline(renderPass, Pipeline);
 				vertexBuffer.Bind(renderPass, 0);
 				SDL_BindGPUFragmentSamplers(renderPass, 0, &spriteSampler, 1);
-				SDL_BindGPUFragmentSamplers(renderPass, 1, &ravioli, 1);
+				SDL_BindGPUFragmentSamplers(renderPass, 1, &specular, 1);
 				SDL_PushGPUVertexUniformData(commandBuffer, 0, &mvp, sizeof(MVP));
+				SDL_PushGPUFragmentUniformData(commandBuffer, 0, &lightUBO, sizeof(lightUBO));
 				SDL_DrawGPUPrimitives(
 					renderPass,
 					36,
@@ -363,6 +384,28 @@ int main(int argc, char *argv[])
 
 				SDL_EndGPURenderPass(renderPass);
 			}
+			/*
+						// Light
+						mvp.model = glm::translate(model, lightUBO.lightPos);
+						mvp.model = glm::scale(mvp.model, glm::vec3(0.2f));
+						mvp.inverseModel = glm::inverse(mvp.model);
+
+						renderPass = SDL_BeginGPURenderPass(
+							commandBuffer,
+							&colorTargetInfo,
+							1,
+							&depthBuffer->depthStencilTargetInfoLoad);
+						SDL_BindGPUGraphicsPipeline(renderPass, LightPipeline);
+						vertexBuffer.Bind(renderPass, 0);
+						SDL_PushGPUVertexUniformData(commandBuffer, 0, &mvp, sizeof(MVP));
+						SDL_PushGPUFragmentUniformData(commandBuffer, 0, &lightUBO, sizeof(glm::vec3));
+						SDL_DrawGPUPrimitives(
+							renderPass,
+							36,
+							1,
+							0,
+							0);
+						SDL_EndGPURenderPass(renderPass);*/
 
 			if (showDepthBuffer)
 			{
@@ -395,6 +438,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	lightColorBuffer.Destroy(device);
 	ubo.Destroy(device);
 	depthBuffer->Destroy(device);
 	vertexBuffer.Destroy(device);
@@ -402,8 +446,8 @@ int main(int argc, char *argv[])
 	SDL_ReleaseGPUSampler(device, depthBuffer->sampler.sampler);
 	SDL_ReleaseGPUTexture(device, spriteSampler.texture);
 	SDL_ReleaseGPUSampler(device, spriteSampler.sampler);
-	SDL_ReleaseGPUTexture(device, ravioli.texture);
-	SDL_ReleaseGPUSampler(device, ravioli.sampler);
+	SDL_ReleaseGPUTexture(device, specular.texture);
+	SDL_ReleaseGPUSampler(device, specular.sampler);
 	SDL_ReleaseGPUGraphicsPipeline(device, Pipeline);
 	SDL_ReleaseGPUGraphicsPipeline(device, PipelineZBufferViwer);
 	SDL_DestroyGPUDevice(device);

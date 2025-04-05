@@ -6,6 +6,7 @@ set_optimize("none")
 add_requires("libsdl3")
 add_requires("libsdl3_image")
 add_requires("glm")
+add_requires("assimp")
 
 target("shaders")
     set_kind("phony")
@@ -31,7 +32,7 @@ target("PixL-Engine")
     set_kind("binary")
     add_includedirs("include")
     add_files("src/**.cpp")
-    add_packages("libsdl3", "libsdl3_image", "glm")
+    add_packages("libsdl3", "libsdl3_image", "glm" , "assimp")
 
     -- Assurer que les shaders sont compilés avant l'application
     add_deps("shaders")
