@@ -1,5 +1,6 @@
+#include <PixL_2D.hpp>
 #include <PixL_Renderer.hpp>
-#include <const/generated_shaders.hpp>
+#include <chrono>
 
 int main(int argc, char *argv[])
 {
@@ -11,13 +12,32 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+	PixL_2D_Init(0);
+
 	PixL_CreateTexture("test_texture", "test.png");
 
-	PixL_CreatePipeline("test_pipeline", &test_vertex, &test_fragment, false, SDL_GPU_COMPAREOP_LESS, false, false);
+	auto start = std::chrono::high_resolution_clock::now();
+
+	std::vector<std::pair<Quad_UBO, int>> quads;
+
+	for (int i = 0; i < 50000; i++)
+	{
+		glm::vec2 random_pos = {};
+		// random pos between -1 and 1
+		random_pos.x = (float)(rand() % 2000 - 1000) / 1000.0f;
+		random_pos.y = (float)(rand() % 2000 - 1000) / 1000.0f;
+		glm::vec2 random_size = {};
+		// random size between 0.1 and 0.6
+		random_size.x = (float)(rand() % 500) / 1000.0f + 0.1f;
+		random_size.y = (float)(rand() % 500) / 1000.0f + 0.1f;
+		Quad_UBO quad = {random_pos, random_size};
+		quads.push_back(std::make_pair(quad, i));
+	}
 
 	bool quit = false;
 	while (!quit)
 	{
+
 		SDL_Event event;
 		while (SDL_PollEvent(&event))
 		{
@@ -32,20 +52,18 @@ int main(int argc, char *argv[])
 		}
 
 		PixL_StartDraw();
-		PixL_Draw(
-			"test_pipeline",
-			"",
-			"",
-			1,
 
-			6,
-			nullptr,
-			{nullptr, 0},
-			nullptr,
+		PixL_2D_DrawTexturedQuadBatch("test_texture", quads);
 
-			{"test_texture"},
-			{nullptr, 0},
-			nullptr);
+		// print time taken and fps
+		auto end = std::chrono::high_resolution_clock::now();
+		std::chrono::duration<double, std::milli> elapsed = end - start;
+		start = end;
+		double fps = 1000.0 / elapsed.count();
+		std::cout << "FPS: " << fps << std::endl;
+		std::cout << "Time: " << elapsed.count() << "ms" << std::endl;
+		std::cout << "Draw Calls: " << PixL_GetDrawCalls() << std::endl;
+		std::cout << "------------------------" << std::endl;
 
 		PixL_SwapBuffers();
 	}

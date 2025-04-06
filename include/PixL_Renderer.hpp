@@ -66,6 +66,7 @@ protected:
 
     SDL_GPUCommandBuffer *commandBuffer = nullptr;
     SDL_GPUTexture *swapchainTexture;
+    SDL_GPURenderPass *renderPass = nullptr;
 
     bool drawing = false;
 
@@ -98,6 +99,26 @@ protected:
         std::vector<std::string> fragmentBufferSamplerNames, // bind samplers to the fragment shader , order is important
         std::pair<void *, size_t> fragmentBufferUBOData,
         TransferBuffer_Struct *fragmentBufferSSBO);
+    friend bool PixL_DrawIndexed(
+        std::string PipelineName,
+        std::string RenderTextureName, // "" for default swapchain texture , texture need to support render target
+        std::string DepthBufferName,   // "" for default depth buffer
+        int instanceCount,
+
+        // Indices
+        int indexCount,
+        IndexBuffer_Struct *indexBuffer,
+
+        // vertex
+        int vertexCount,
+        VertexBuffer_Struct *vertexBuffer,
+        std::pair<void *, size_t> vertexBufferUBOData,
+        TransferBuffer_Struct *vertexBufferSSBO,
+
+        // fragment
+        std::vector<std::string> fragmentBufferSamplerNames, // bind samplers to the fragment shader , order is important
+        std::pair<void *, size_t> fragmentBufferUBOData,
+        TransferBuffer_Struct *fragmentBufferSSBO);
     friend bool PixL_StartDraw();
     friend void PixL_SwapBuffers();
     friend bool PixL_CreatePipeline(std::string name, Shader_Struct *vertexShader, Shader_Struct *fragmentShader, bool depthTest, SDL_GPUCompareOp compareOp, bool enable_depth_test, bool enable_depth_write);
@@ -105,6 +126,13 @@ protected:
     friend bool PixL_CreateDepthBuffer(std::string name);
     friend bool PixL_DestroyDepthBuffer(std::string name);
     friend bool PixL_CreateTexture(std::string name, std::string imagePath);
+    friend bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBufferName, bool needDepthBuffer);
+    friend bool PixL_EndRenderPass();
+
+    friend int PixL_GetDrawCalls();
+
+    friend bool PixL_2D_Init(uint32_t flags);
+    friend class PixL_2D;
 
     // callbacks
     friend void PixL_Callback_WindowResized();
@@ -137,6 +165,27 @@ bool PixL_Draw(
     std::pair<void *, size_t> fragmentBufferUBOData,
     TransferBuffer_Struct *fragmentBufferSSBO);
 
+bool PixL_DrawIndexed(
+    std::string PipelineName,
+    std::string RenderTextureName, // "" for default swapchain texture , texture need to support render target
+    std::string DepthBufferName,   // "" for default depth buffer
+    int instanceCount,
+
+    // Indices
+    int indexCount,
+    IndexBuffer_Struct *indexBuffer,
+
+    // vertex
+    int vertexCount,
+    VertexBuffer_Struct *vertexBuffer,
+    std::pair<void *, size_t> vertexBufferUBOData,
+    TransferBuffer_Struct *vertexBufferSSBO,
+
+    // fragment
+    std::vector<std::string> fragmentBufferSamplerNames, // bind samplers to the fragment shader , order is important
+    std::pair<void *, size_t> fragmentBufferUBOData,
+    TransferBuffer_Struct *fragmentBufferSSBO);
+
 bool PixL_StartDraw();
 void PixL_SwapBuffers();
 bool PixL_CreatePipeline(std::string name, Shader_Struct *vertexShader, Shader_Struct *fragmentShader, bool depthTest = false, SDL_GPUCompareOp compareOp = SDL_GPU_COMPAREOP_LESS, bool enable_depth_test = true, bool enable_depth_write = true);
@@ -144,6 +193,10 @@ bool PixL_DestroyPipeline(std::string name);
 bool PixL_CreateDepthBuffer(std::string name);
 bool PixL_DestroyDepthBuffer(std::string name);
 bool PixL_CreateTexture(std::string name, std::string imagePath);
+bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBufferName, bool needDepthBuffer);
+bool PixL_EndRenderPass();
+
+int PixL_GetDrawCalls();
 
 // callbacks
 void PixL_Callback_WindowResized();

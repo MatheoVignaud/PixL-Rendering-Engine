@@ -122,6 +122,11 @@ bool PixL_Draw(
         SDL_Log("PixL_Renderer not drawing. Call PixL_StartDraw() first.");
         return false;
     }
+    bool unique_renderPass = false;
+    if (PixL_Renderer::_instance->renderPass == nullptr)
+    {
+        unique_renderPass = true;
+    }
 
     // Find the pipeline
     Named_Pipeline *pipeline = nullptr;
@@ -136,62 +141,6 @@ bool PixL_Draw(
     if (!pipeline)
     {
         SDL_Log("Pipeline %s not found", PipelineName.c_str());
-        return false;
-    }
-
-    // check if the pipeline needs a depth buffer
-    Named_DepthBuffer *depthBuffer = nullptr;
-    if (pipeline->needDepthBuffer)
-    {
-        bool defaultDepthBuffer = false;
-        if (DepthBufferName.empty())
-        {
-            defaultDepthBuffer = true;
-        }
-
-        for (auto &db : PixL_Renderer::_instance->_depthBuffers)
-        {
-            if (db.name == (defaultDepthBuffer ? "default" : DepthBufferName))
-            {
-                depthBuffer = &db;
-                break;
-            }
-        }
-
-        if (!depthBuffer)
-        {
-            SDL_Log("Depth buffer %s not found", DepthBufferName.c_str());
-            return false;
-        }
-    }
-
-    // Find the render texture
-    SDL_GPUTexture *renderTexture = nullptr;
-    if (!RenderTextureName.empty() && RenderTextureName != DEFAULT_NAME)
-    {
-        for (auto &texture : PixL_Renderer::_instance->_textures)
-        {
-            if (texture.name == RenderTextureName)
-            {
-                renderTexture = texture.sampler.texture;
-                break;
-            }
-        }
-        if (!renderTexture)
-        {
-            SDL_Log("Render texture %s not found", RenderTextureName.c_str());
-            return false;
-        }
-    }
-    else
-    {
-        // Use the swapchain texture
-        renderTexture = PixL_Renderer::_instance->swapchainTexture;
-    }
-
-    if (!renderTexture)
-    {
-        SDL_Log("Render texture is null");
         return false;
     }
 
@@ -221,50 +170,27 @@ bool PixL_Draw(
         return false;
     }
 
-    // Create the render pass but take in account the number of draw calls
-    SDL_GPUColorTargetInfo colorTargetInfo = {0};
-    colorTargetInfo.texture = renderTexture;
-    colorTargetInfo.clear_color = (SDL_FColor){0.0f, 0.0f, 0.0f, 1.0f};
-    if (PixL_Renderer::_instance->_drawCalls == 0)
+    if (unique_renderPass)
     {
-        colorTargetInfo.load_op = SDL_GPU_LOADOP_CLEAR;
-    }
-    else
-    {
-        colorTargetInfo.load_op = SDL_GPU_LOADOP_LOAD;
-    }
-    colorTargetInfo.store_op = SDL_GPU_STOREOP_STORE;
-
-    SDL_GPUDepthStencilTargetInfo depthStencilTargetInfo = {0};
-    if (depthBuffer)
-    {
-        if (PixL_Renderer::_instance->depthBufferClear)
+        if (!PixL_StartRenderPass(RenderTextureName, DepthBufferName, pipeline->needDepthBuffer))
         {
-            depthStencilTargetInfo = depthBuffer->depthBuffer.depthStencilTargetInfoLoad;
-        }
-        else
-        {
-            depthStencilTargetInfo = depthBuffer->depthBuffer.depthStencilTargetInfoClear;
+            SDL_Log("Could not start render pass: %s", SDL_GetError());
+            return false;
         }
     }
-
-    SDL_GPURenderPass *renderPass = SDL_BeginGPURenderPass(PixL_Renderer::_instance->commandBuffer,
-                                                           &colorTargetInfo,
-                                                           1,
-                                                           depthBuffer ? &depthStencilTargetInfo : NULL);
 
     // Bind the pipeline
-    SDL_BindGPUGraphicsPipeline(renderPass, pipeline->pipeline);
+    SDL_BindGPUGraphicsPipeline(PixL_Renderer::_instance->renderPass, pipeline->pipeline);
     // Bind the vertex buffer
     if (vertexBuffer)
     {
-        vertexBuffer->Bind(renderPass, 0);
+        vertexBuffer->Bind(PixL_Renderer::_instance->renderPass, 0);
     }
 
     // Bind the vertex uniform buffer
     if (vertexBuffer)
     {
-        vertexBuffer->Bind(renderPass, 0);
+        vertexBuffer->Bind(PixL_Renderer::_instance->renderPass, 0);
     }
     if (vertexBufferUBOData.first && pipeline->vertexShader_UniformBuffer_Count > 0)
     {
@@ -277,7 +203,7 @@ bool PixL_Draw(
     {
         for (size_t i = 0; i < fragmentBufferSamplers.size(); ++i)
         {
-            SDL_BindGPUFragmentSamplers(renderPass, i, &fragmentBufferSamplers[i], 1);
+            SDL_BindGPUFragmentSamplers(PixL_Renderer::_instance->renderPass, i, &fragmentBufferSamplers[i], 1);
         }
     }
     // Bind the fragment uniform buffer
@@ -288,19 +214,171 @@ bool PixL_Draw(
     // TODO : Bind the fragment storage buffer
 
     SDL_DrawGPUPrimitives(
-        renderPass,
+        PixL_Renderer::_instance->renderPass,
         vertexCount,
         instanceCount,
         0,
         0);
 
-    SDL_EndGPURenderPass(renderPass);
-    PixL_Renderer::_instance->_drawCalls++;
+    if (unique_renderPass)
+    {
+        PixL_EndRenderPass();
+    }
 
-    if (depthBuffer && !PixL_Renderer::_instance->depthBufferClear)
+    if (!PixL_Renderer::_instance->depthBufferClear && pipeline->needDepthBuffer)
     {
         PixL_Renderer::_instance->depthBufferClear = true;
     }
+    PixL_Renderer::_instance->_drawCalls++;
+    return true;
+}
+
+bool PixL_DrawIndexed(
+    std::string PipelineName,
+    std::string RenderTextureName, // "" for default swapchain texture , texture need to support render target
+    std::string DepthBufferName,   // "" for default depth buffer
+    int instanceCount,
+
+    // Indices
+    int indexCount,
+    IndexBuffer_Struct *indexBuffer,
+
+    // vertex
+    int vertexCount,
+    VertexBuffer_Struct *vertexBuffer,
+    std::pair<void *, size_t> vertexBufferUBOData,
+    TransferBuffer_Struct *vertexBufferSSBO,
+
+    // fragment
+    std::vector<std::string> fragmentBufferSamplerNames, // bind samplers to the fragment shader , order is important
+    std::pair<void *, size_t> fragmentBufferUBOData,
+    TransferBuffer_Struct *fragmentBufferSSBO)
+{
+
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    if (!PixL_Renderer::_instance->drawing)
+    {
+        SDL_Log("PixL_Renderer not drawing. Call PixL_StartDraw() first.");
+        return false;
+    }
+    bool unique_renderPass = false;
+    if (PixL_Renderer::_instance->renderPass == nullptr)
+    {
+        unique_renderPass = true;
+    }
+
+    // Find the pipeline
+    Named_Pipeline *pipeline = nullptr;
+    for (auto &p : PixL_Renderer::_instance->_pipelines)
+    {
+        if (p.name == PipelineName)
+        {
+            pipeline = &p;
+            break;
+        }
+    }
+    if (!pipeline)
+    {
+        SDL_Log("Pipeline %s not found", PipelineName.c_str());
+        return false;
+    }
+
+    // Find the fragment buffer samplers
+    std::vector<SDL_GPUTextureSamplerBinding> fragmentBufferSamplers;
+    for (const auto &samplerName : fragmentBufferSamplerNames)
+    {
+        SDL_GPUTextureSamplerBinding sampler = {nullptr, nullptr};
+        for (const auto &texture : PixL_Renderer::_instance->_textures)
+        {
+            if (texture.name == samplerName)
+            {
+                sampler = texture.sampler;
+                break;
+            }
+        }
+        if (!sampler.texture)
+        {
+            SDL_Log("Fragment buffer sampler %s not found", samplerName.c_str());
+            return false;
+        }
+        fragmentBufferSamplers.push_back(sampler);
+    }
+    if (fragmentBufferSamplers.size() != pipeline->fragmentShader_Sampler_Count)
+    {
+        SDL_Log("Fragment buffer sampler count mismatch. Expected %d, got %zu", pipeline->fragmentShader_Sampler_Count, fragmentBufferSamplers.size());
+        return false;
+    }
+    if (unique_renderPass)
+    {
+        if (!PixL_StartRenderPass(RenderTextureName, DepthBufferName, pipeline->needDepthBuffer))
+        {
+            SDL_Log("Could not start render pass: %s", SDL_GetError());
+            return false;
+        }
+    }
+
+    // Bind the pipeline
+    SDL_BindGPUGraphicsPipeline(PixL_Renderer::_instance->renderPass, pipeline->pipeline);
+    // Bind the vertex buffer
+    if (vertexBuffer)
+    {
+        vertexBuffer->Bind(PixL_Renderer::_instance->renderPass, 0);
+    }
+
+    // Bind the vertex uniform buffer
+    if (vertexBuffer)
+    {
+        vertexBuffer->Bind(PixL_Renderer::_instance->renderPass, 0);
+    }
+    if (vertexBufferUBOData.first && pipeline->vertexShader_UniformBuffer_Count > 0)
+    {
+        SDL_PushGPUVertexUniformData(PixL_Renderer::_instance->commandBuffer, 0, vertexBufferUBOData.first, vertexBufferUBOData.second);
+    }
+    // Bind the vertex storage buffer
+
+    // TODO : Bind the fragment samplers
+    if (!fragmentBufferSamplers.empty())
+    {
+        for (size_t i = 0; i < fragmentBufferSamplers.size(); ++i)
+        {
+            SDL_BindGPUFragmentSamplers(PixL_Renderer::_instance->renderPass, i, &fragmentBufferSamplers[i], 1);
+        }
+    }
+    // Bind the fragment uniform buffer
+    if (fragmentBufferUBOData.first && pipeline->fragmentShader_UniformBuffer_Count > 0)
+    {
+        SDL_PushGPUFragmentUniformData(PixL_Renderer::_instance->commandBuffer, 0, fragmentBufferUBOData.first, fragmentBufferUBOData.second);
+    }
+    // TODO : Bind the fragment storage buffer
+
+    if (indexBuffer)
+    {
+        indexBuffer->Bind(PixL_Renderer::_instance->renderPass, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+    }
+
+    SDL_DrawGPUIndexedPrimitives(
+        PixL_Renderer::_instance->renderPass,
+        indexCount,
+        instanceCount,
+        0,
+        0,
+        0);
+
+    if (unique_renderPass)
+    {
+        PixL_EndRenderPass();
+    }
+    PixL_Renderer::_instance->_drawCalls++;
+
+    if (!PixL_Renderer::_instance->depthBufferClear & pipeline->needDepthBuffer)
+    {
+        PixL_Renderer::_instance->depthBufferClear = true;
+    }
+
     return true;
 }
 
@@ -323,18 +401,17 @@ bool PixL_StartDraw()
         SDL_Log("Could not acquire command buffer: %s", SDL_GetError());
         return false;
     }
-    SDL_GPUTexture *swapchainTexture = nullptr;
-    if (!SDL_WaitAndAcquireGPUSwapchainTexture(PixL_Renderer::_instance->commandBuffer, PixL_Renderer::_instance->_window, &swapchainTexture, NULL, NULL))
+
+    if (!SDL_WaitAndAcquireGPUSwapchainTexture(PixL_Renderer::_instance->commandBuffer, PixL_Renderer::_instance->_window, &PixL_Renderer::_instance->swapchainTexture, NULL, NULL))
     {
         SDL_Log("WaitAndAcquireGPUSwapchainTexture failed: %s", SDL_GetError());
         return false;
     }
-    if (!swapchainTexture)
+    if (!PixL_Renderer::_instance->swapchainTexture)
     {
         SDL_Log("Swapchain texture is null");
         return false;
     }
-    PixL_Renderer::_instance->swapchainTexture = swapchainTexture;
 
     PixL_Renderer::_instance->_drawCalls = 0;
 
@@ -349,7 +426,7 @@ void PixL_SwapBuffers()
         return;
     }
     SDL_SubmitGPUCommandBuffer(PixL_Renderer::_instance->commandBuffer);
-    PixL_Renderer::_instance->commandBuffer = SDL_AcquireGPUCommandBuffer(PixL_Renderer::_instance->_device);
+
     PixL_Renderer::_instance->drawing = false;
 }
 
@@ -490,6 +567,142 @@ bool PixL_CreateTexture(std::string name, std::string imagePath)
     SDL_Log("Texture %s created successfully", name.c_str());
 
     return true;
+}
+
+bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBufferName, bool needDepthBuffer)
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    if (!PixL_Renderer::_instance->drawing)
+    {
+        SDL_Log("PixL_Renderer not drawing. Call PixL_StartDraw() first.");
+        return false;
+    }
+
+    // Find the render texture
+    SDL_GPUTexture *renderTexture = nullptr;
+    if (!RenderTextureName.empty() || RenderTextureName == DEFAULT_NAME)
+    {
+        for (auto &texture : PixL_Renderer::_instance->_textures)
+        {
+            if (texture.name == RenderTextureName)
+            {
+                renderTexture = texture.sampler.texture;
+                break;
+            }
+        }
+        if (!renderTexture)
+        {
+            SDL_Log("Render texture %s not found", RenderTextureName.c_str());
+            return false;
+        }
+    }
+    else
+    {
+        // Use the swapchain texture
+        renderTexture = PixL_Renderer::_instance->swapchainTexture;
+    }
+
+    if (!renderTexture)
+    {
+        SDL_Log("Render texture is null");
+        return false;
+    }
+
+    Named_DepthBuffer *depthBuffer = nullptr;
+    if (needDepthBuffer)
+    {
+        bool defaultDepthBuffer = false;
+        if (DepthBufferName.empty())
+        {
+            defaultDepthBuffer = true;
+        }
+
+        for (auto &db : PixL_Renderer::_instance->_depthBuffers)
+        {
+            if (db.name == (defaultDepthBuffer ? "default" : DepthBufferName))
+            {
+                depthBuffer = &db;
+                break;
+            }
+        }
+
+        if (!depthBuffer)
+        {
+            SDL_Log("Depth buffer %s not found", DepthBufferName.c_str());
+            return false;
+        }
+    }
+
+    // Create the render pass but take in account the number of draw calls
+    SDL_GPUColorTargetInfo colorTargetInfo = {0};
+    colorTargetInfo.texture = renderTexture;
+    colorTargetInfo.clear_color = (SDL_FColor){0.0f, 0.0f, 0.0f, 1.0f};
+    if (PixL_Renderer::_instance->_drawCalls == 0)
+    {
+        colorTargetInfo.load_op = SDL_GPU_LOADOP_CLEAR;
+    }
+    else
+    {
+        colorTargetInfo.load_op = SDL_GPU_LOADOP_LOAD;
+    }
+    colorTargetInfo.store_op = SDL_GPU_STOREOP_STORE;
+
+    SDL_GPUDepthStencilTargetInfo depthStencilTargetInfo = {0};
+    if (depthBuffer)
+    {
+        if (PixL_Renderer::_instance->depthBufferClear)
+        {
+            depthStencilTargetInfo = depthBuffer->depthBuffer.depthStencilTargetInfoLoad;
+        }
+        else
+        {
+            depthStencilTargetInfo = depthBuffer->depthBuffer.depthStencilTargetInfoClear;
+        }
+    }
+
+    PixL_Renderer::_instance->renderPass = SDL_BeginGPURenderPass(PixL_Renderer::_instance->commandBuffer,
+                                                                  &colorTargetInfo,
+                                                                  1,
+                                                                  depthBuffer ? &depthStencilTargetInfo : NULL);
+    return true;
+}
+
+bool PixL_EndRenderPass()
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    if (!PixL_Renderer::_instance->drawing)
+    {
+        SDL_Log("PixL_Renderer not drawing. Call PixL_StartDraw() first.");
+        return false;
+    }
+    if (PixL_Renderer::_instance->renderPass == nullptr)
+    {
+        SDL_Log("Render pass not started. Call PixL_StartRenderPass() first.");
+        return false;
+    }
+
+    std::cout << "Ending render pass" << std::endl;
+    SDL_EndGPURenderPass(PixL_Renderer::_instance->renderPass);
+    PixL_Renderer::_instance->renderPass = nullptr;
+    return true;
+}
+
+int PixL_GetDrawCalls()
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return -1;
+    }
+    return PixL_Renderer::_instance->_drawCalls;
 }
 
 void PixL_Callback_WindowResized()
