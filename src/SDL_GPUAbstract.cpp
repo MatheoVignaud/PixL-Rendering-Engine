@@ -119,6 +119,42 @@ SDL_GPUTextureSamplerBinding CreateSamplerFromImage(SDL_GPUDevice *device, std::
     SDL_ReleaseGPUTransferBuffer(device, textureTransferBuffer);
 
     return {Texture, Sampler};
+}
+SDL_GPUTextureSamplerBinding CreateBlankSampler(SDL_GPUDevice *device, SDL_GPUTextureFormat format, uint32_t width, uint32_t height, SDL_GPUTextureUsageFlags usage)
+{
+    SDL_GPUTextureCreateInfo textureCreateInfo = {};
+    textureCreateInfo.type = SDL_GPU_TEXTURETYPE_2D;
+    textureCreateInfo.format = format;
+    textureCreateInfo.width = width;
+    textureCreateInfo.height = height;
+    textureCreateInfo.layer_count_or_depth = 1;
+    textureCreateInfo.num_levels = 1;
+    textureCreateInfo.usage = usage;
+
+    SDL_GPUTexture *texture = SDL_CreateGPUTexture(
+        device,
+        &textureCreateInfo);
+
+    if (texture == NULL)
+    {
+        SDL_Log("Failed to create texture!");
+        throw std::runtime_error("Failed to create texture!");
+        return {};
+    }
+
+    SDL_GPUSamplerCreateInfo samplerCreateInfo = {};
+    samplerCreateInfo.min_filter = SDL_GPU_FILTER_NEAREST;
+    samplerCreateInfo.mag_filter = SDL_GPU_FILTER_NEAREST;
+    samplerCreateInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+    samplerCreateInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    samplerCreateInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    samplerCreateInfo.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+
+    SDL_GPUSampler *sampler = SDL_CreateGPUSampler(
+        device,
+        &samplerCreateInfo);
+
+    return {texture, sampler};
 };
 
 TransferBuffer_Struct CreateUBO(SDL_GPUDevice *device, size_t size)

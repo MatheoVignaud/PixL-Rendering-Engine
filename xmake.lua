@@ -8,6 +8,7 @@ add_requires("libsdl3_image")
 add_requires("glm")
 add_requires("assimp")
 
+
 target("shaders")
     set_kind("phony")
     before_build(function ()

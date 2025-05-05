@@ -12,27 +12,15 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	PixL_2D_Init(0);
+	PixL_2D_Init();
 
 	PixL_CreateTexture("test_texture", "test.png");
 
 	auto start = std::chrono::high_resolution_clock::now();
 
-	std::vector<std::pair<Quad_UBO, int>> quads;
+	PixL_Callback_WindowResized();
 
-	for (int i = 0; i < 50000; i++)
-	{
-		glm::vec2 random_pos = {};
-		// random pos between -1 and 1
-		random_pos.x = (float)(rand() % 2000 - 1000) / 1000.0f;
-		random_pos.y = (float)(rand() % 2000 - 1000) / 1000.0f;
-		glm::vec2 random_size = {};
-		// random size between 0.1 and 0.6
-		random_size.x = (float)(rand() % 500) / 1000.0f + 0.1f;
-		random_size.y = (float)(rand() % 500) / 1000.0f + 0.1f;
-		Quad_UBO quad = {random_pos, random_size};
-		quads.push_back(std::make_pair(quad, i));
-	}
+	PixL_CreateVBO("default", sizeof(glm::vec2) * 6);
 
 	bool quit = false;
 	while (!quit)
@@ -53,7 +41,33 @@ int main(int argc, char *argv[])
 
 		PixL_StartDraw();
 
-		PixL_2D_DrawTexturedQuadBatch("test_texture", quads);
+		for (int i = 0; i < 2; i++)
+		{
+			// create random vertex data
+			// between -1 and 1
+
+			std::vector<glm::vec2> vertices = {
+				glm::vec2(
+					(float)(rand() % 2000) / 1000.0f - 1.0f,
+					(float)(rand() % 2000) / 1000.0f - 1.0f),
+				glm::vec2(
+					(float)(rand() % 2000) / 1000.0f - 1.0f,
+					(float)(rand() % 2000) / 1000.0f - 1.0f),
+				glm::vec2(
+					(float)(rand() % 2000) / 1000.0f - 1.0f,
+					(float)(rand() % 2000) / 1000.0f - 1.0f),
+				glm::vec2(
+					(float)(rand() % 2000) / 1000.0f - 1.0f,
+					(float)(rand() % 2000) / 1000.0f - 1.0f),
+				glm::vec2(
+					(float)(rand() % 2000) / 1000.0f - 1.0f,
+					(float)(rand() % 2000) / 1000.0f - 1.0f),
+				glm::vec2(
+					(float)(rand() % 2000) / 1000.0f - 1.0f,
+					(float)(rand() % 2000) / 1000.0f - 1.0f)};
+		}
+
+		PixL_SwapBuffers();
 
 		// print time taken and fps
 		auto end = std::chrono::high_resolution_clock::now();
@@ -64,9 +78,9 @@ int main(int argc, char *argv[])
 		std::cout << "Time: " << elapsed.count() << "ms" << std::endl;
 		std::cout << "Draw Calls: " << PixL_GetDrawCalls() << std::endl;
 		std::cout << "------------------------" << std::endl;
-
-		PixL_SwapBuffers();
 	}
+
+	PixL_Renderer_Quit();
 
 	return 0;
 }

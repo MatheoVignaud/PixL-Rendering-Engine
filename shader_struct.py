@@ -144,6 +144,8 @@ def sanitize_name(path):
     return name.replace(".", "_").replace("-", "_")
 
 def generate_hpp(shader_structs, output_path="include/const/generated_shaders.hpp"):
+    """Génère le fichier d'en-tête avec des déclarations extern"""
+    print(f"Generating {output_path}...")
     with open(output_path, 'w') as f:
         f.write("// Auto-generated shader instances\n")
         f.write("#pragma once\n\n")
@@ -155,6 +157,27 @@ def generate_hpp(shader_structs, output_path="include/const/generated_shaders.hp
                 name += "_vertex"
             elif s.shader_Stage == "SDL_GPU_SHADERSTAGE_FRAGMENT":
                 name += "_fragment"
+            
+            # Déclaration extern
+            f.write(f"extern Shader_Struct {name};\n")
+        
+        f.write("\n")
+
+def generate_cpp(shader_structs, output_path="src/generated_shaders.cpp"):
+    """Génère le fichier source avec les définitions complètes"""
+    print(f"Generating {output_path}...")
+    with open(output_path, 'w') as f:
+        f.write("// Fichier généré automatiquement\n")
+        f.write("#include \"const/generated_shaders.hpp\"\n\n")
+        f.write("// Définitions des structures de shaders\n")
+
+        for s in shader_structs:
+            name = sanitize_name(s.shader_Path)
+            if s.shader_Stage == "SDL_GPU_SHADERSTAGE_VERTEX":
+                name += "_vertex"
+            elif s.shader_Stage == "SDL_GPU_SHADERSTAGE_FRAGMENT":
+                name += "_fragment"
+            
             path_str = s.shader_Path.replace("\\", "/").replace("shaders/", "")
             f.write(f"Shader_Struct {name} = {{\n")
             f.write(f'    "{path_str}",\n')
@@ -181,4 +204,7 @@ def generate_hpp(shader_structs, output_path="include/const/generated_shaders.hp
 shader_dir = "shaders"
 shaders = list_shader_files(shader_dir)
 shader_structs = [parse_shader(shader) for shader in shaders]
+print(f"Found {len(shader_structs)} shader files.")
 generate_hpp(shader_structs)
+generate_cpp(shader_structs)
+print("Generation completed successfully.")

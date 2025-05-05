@@ -160,6 +160,7 @@ bool PixL_Draw(
         if (!sampler.texture)
         {
             SDL_Log("Fragment buffer sampler %s not found", samplerName.c_str());
+            throw std::runtime_error("Fragment buffer sampler not found");
             return false;
         }
         fragmentBufferSamplers.push_back(sampler);
@@ -230,6 +231,7 @@ bool PixL_Draw(
         PixL_Renderer::_instance->depthBufferClear = true;
     }
     PixL_Renderer::_instance->_drawCalls++;
+    std::cout << "Draw with pipeline " << PipelineName << " with " << vertexCount << " vertices and " << instanceCount << " instances" << std::endl;
     return true;
 }
 
@@ -461,7 +463,9 @@ bool PixL_CreatePipeline(std::string name, Shader_Struct *vertexShader, Shader_S
     named_pipeline.fragmentShader_StorageTexture_Count = fragmentShader->storage_Texture_Count;
     named_pipeline.vertexShader_UniformBuffer_Count = vertexShader->uniform_Buffer_Count;
     named_pipeline.vertexShader_StorageBuffer_Count = vertexShader->storage_Buffer_Count;
-
+    named_pipeline.compareOp = compareOp;
+    named_pipeline.enable_depth_test = enable_depth_test;
+    named_pipeline.enable_depth_write = enable_depth_write;
     named_pipeline.needDepthBuffer = depthTest;
     PixL_Renderer::_instance->_pipelines.push_back(named_pipeline);
 
@@ -569,7 +573,61 @@ bool PixL_CreateTexture(std::string name, std::string imagePath)
     return true;
 }
 
-bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBufferName, bool needDepthBuffer)
+bool PixL_CreateBlankTexture(std::string name, int width, int height, SDL_GPUTextureUsageFlags usage)
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    // Check if the texture already exists
+    for (const auto &texture : PixL_Renderer::_instance->_textures)
+    {
+        if (texture.name == name)
+        {
+            SDL_Log("Texture %s already exists", name);
+            return false;
+        }
+    }
+
+    SDL_GPUTextureSamplerBinding sampler = CreateBlankSampler(PixL_Renderer::_instance->_device, SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM, width, height, usage);
+    if (!sampler.texture)
+    {
+        SDL_Log("Could not create texture: %s", SDL_GetError());
+        return false;
+    }
+
+    Named_Texture named_texture = {name, sampler};
+    PixL_Renderer::_instance->_textures.push_back(named_texture);
+
+    SDL_Log("Texture %s created successfully", name.c_str());
+
+    return true;
+}
+
+bool PixL_DestroyTexture(std::string name)
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    for (auto it = PixL_Renderer::_instance->_textures.begin(); it != PixL_Renderer::_instance->_textures.end(); ++it)
+    {
+        if (it->name == name)
+        {
+            SDL_ReleaseGPUTexture(PixL_Renderer::_instance->_device, it->sampler.texture);
+            SDL_ReleaseGPUSampler(PixL_Renderer::_instance->_device, it->sampler.sampler);
+            PixL_Renderer::_instance->_textures.erase(it);
+            SDL_Log("Texture %s destroyed successfully", name.c_str());
+            return true;
+        }
+    }
+    SDL_Log("Texture %s not found", name.c_str());
+    return false;
+}
+
+bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBufferName, bool needDepthBuffer, bool clearBuffers)
 {
     if (!PixL_Renderer::_instance)
     {
@@ -641,7 +699,7 @@ bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBuffer
     SDL_GPUColorTargetInfo colorTargetInfo = {0};
     colorTargetInfo.texture = renderTexture;
     colorTargetInfo.clear_color = (SDL_FColor){0.0f, 0.0f, 0.0f, 1.0f};
-    if (PixL_Renderer::_instance->_drawCalls == 0)
+    if (PixL_Renderer::_instance->_drawCalls == 0 || clearBuffers)
     {
         colorTargetInfo.load_op = SDL_GPU_LOADOP_CLEAR;
     }
@@ -686,6 +744,7 @@ bool PixL_EndRenderPass()
     if (PixL_Renderer::_instance->renderPass == nullptr)
     {
         SDL_Log("Render pass not started. Call PixL_StartRenderPass() first.");
+        throw std::runtime_error("Render pass not started. Call PixL_StartRenderPass() first.");
         return false;
     }
 
@@ -693,6 +752,165 @@ bool PixL_EndRenderPass()
     SDL_EndGPURenderPass(PixL_Renderer::_instance->renderPass);
     PixL_Renderer::_instance->renderPass = nullptr;
     return true;
+}
+
+bool PixL_CreateVBO(std::string name, size_t size)
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    // Check if the VBO already exists
+    for (const auto &vbo : PixL_Renderer::_instance->_VBOs)
+    {
+        if (vbo.name == name)
+        {
+            SDL_Log("VBO %s already exists", name);
+            return false;
+        }
+    }
+    // Create the VBO
+    VertexBuffer_Struct vbo = CreateVBO(PixL_Renderer::_instance->_device, size);
+    if (!vbo.buffer)
+    {
+        SDL_Log("Could not create VBO: %s", SDL_GetError());
+        return false;
+    }
+    Named_VBO named_vbo = {name, vbo};
+    PixL_Renderer::_instance->_VBOs.push_back(named_vbo);
+    SDL_Log("VBO %s created successfully", name.c_str());
+    return true;
+}
+
+bool PixL_DestroyVBO(std::string name)
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    for (auto it = PixL_Renderer::_instance->_VBOs.begin(); it != PixL_Renderer::_instance->_VBOs.end(); ++it)
+    {
+        if (it->name == name)
+        {
+            it->vertexBuffer.Destroy(PixL_Renderer::_instance->_device);
+            PixL_Renderer::_instance->_VBOs.erase(it);
+            SDL_Log("VBO %s destroyed successfully", name.c_str());
+            return true;
+        }
+    }
+    SDL_Log("VBO %s not found", name.c_str());
+    return false;
+}
+
+VertexBuffer_Struct *PixL_GetVBO(std::string name)
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return nullptr;
+    }
+    for (auto &vbo : PixL_Renderer::_instance->_VBOs)
+    {
+        if (vbo.name == name)
+        {
+            return &vbo.vertexBuffer;
+        }
+    }
+    SDL_Log("VBO %s not found", name.c_str());
+    throw std::runtime_error("VBO not found");
+    return nullptr;
+}
+
+bool PixL_Pipelines_Layout_Compatibility(std::string Pipeline1, std::string Pipeline2)
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    Named_Pipeline *pipeline1 = nullptr;
+    Named_Pipeline *pipeline2 = nullptr;
+    for (auto &p : PixL_Renderer::_instance->_pipelines)
+    {
+        if (p.name == Pipeline1)
+        {
+            pipeline1 = &p;
+        }
+        if (p.name == Pipeline2)
+        {
+            pipeline2 = &p;
+        }
+    }
+    if (!pipeline1 || !pipeline2)
+    {
+        SDL_Log("Pipeline %s or %s not found", Pipeline1.c_str(), Pipeline2.c_str());
+        return false;
+    }
+
+    if (pipeline1->vertexShader_UniformBuffer_Count != pipeline2->vertexShader_UniformBuffer_Count)
+    {
+        SDL_Log("Pipeline %s and %s have different vertex shader uniform buffer counts", Pipeline1.c_str(), Pipeline2.c_str());
+        return false;
+    }
+    if (pipeline1->vertexShader_StorageBuffer_Count != pipeline2->vertexShader_StorageBuffer_Count)
+    {
+        SDL_Log("Pipeline %s and %s have different vertex shader storage buffer counts", Pipeline1.c_str(), Pipeline2.c_str());
+        return false;
+    }
+    if (pipeline1->fragmentShader_Sampler_Count != pipeline2->fragmentShader_Sampler_Count)
+    {
+        SDL_Log("Pipeline %s and %s have different fragment shader sampler counts", Pipeline1.c_str(), Pipeline2.c_str());
+        return false;
+    }
+    if (pipeline1->fragmentShader_UniformBuffer_Count != pipeline2->fragmentShader_UniformBuffer_Count)
+    {
+        SDL_Log("Pipeline %s and %s have different fragment shader uniform buffer counts", Pipeline1.c_str(), Pipeline2.c_str());
+        return false;
+    }
+    if (pipeline1->fragmentShader_StorageBuffer_Count != pipeline2->fragmentShader_StorageBuffer_Count)
+    {
+        SDL_Log("Pipeline %s and %s have different fragment shader storage buffer counts", Pipeline1.c_str(), Pipeline2.c_str());
+        return false;
+    }
+    if (pipeline1->fragmentShader_StorageTexture_Count != pipeline2->fragmentShader_StorageTexture_Count)
+    {
+        SDL_Log("Pipeline %s and %s have different fragment shader storage texture counts", Pipeline1.c_str(), Pipeline2.c_str());
+        return false;
+    }
+    if (pipeline1->compareOp != pipeline2->compareOp)
+    {
+        SDL_Log("Pipeline %s and %s have different compare ops", Pipeline1.c_str(), Pipeline2.c_str());
+        return false;
+    }
+    if (pipeline1->enable_depth_test != pipeline2->enable_depth_test)
+    {
+        SDL_Log("Pipeline %s and %s have different depth test settings", Pipeline1.c_str(), Pipeline2.c_str());
+        return false;
+    }
+    if (pipeline1->enable_depth_write != pipeline2->enable_depth_write)
+    {
+        SDL_Log("Pipeline %s and %s have different depth write settings", Pipeline1.c_str(), Pipeline2.c_str());
+        return false;
+    }
+    if (pipeline1->needDepthBuffer != pipeline2->needDepthBuffer)
+    {
+        SDL_Log("Pipeline %s and %s have different depth buffer settings", Pipeline1.c_str(), Pipeline2.c_str());
+        return false;
+    }
+
+    return true;
+}
+
+glm::vec2 PixL_GetWindowSize()
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return glm::vec2(0, 0);
+    }
+    return glm::vec2(PixL_Renderer::_instance->window_width, PixL_Renderer::_instance->window_height);
 }
 
 int PixL_GetDrawCalls()
@@ -713,4 +931,6 @@ void PixL_Callback_WindowResized()
         return;
     }
     SDL_GetWindowSize(PixL_Renderer::_instance->_window, &PixL_Renderer::_instance->window_width, &PixL_Renderer::_instance->window_height);
+
+    // Appeler la fonction de redimensionnement des textures des layers 2D
 }

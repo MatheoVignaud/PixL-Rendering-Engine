@@ -3,6 +3,7 @@
 #include <SDL_GPUAbstract.hpp>
 #include <algorithm>
 #include <cmath>
+#include <glm/glm.hpp>
 #include <iostream>
 #include <mutex>
 #include <stdio.h>
@@ -20,6 +21,9 @@ struct Named_Pipeline
     int fragmentShader_UniformBuffer_Count = 0;
     int fragmentShader_StorageBuffer_Count = 0;
     int fragmentShader_StorageTexture_Count = 0;
+    SDL_GPUCompareOp compareOp = SDL_GPU_COMPAREOP_ALWAYS;
+    bool enable_depth_test = false;
+    bool enable_depth_write = false;
     bool needDepthBuffer = false;
 };
 
@@ -33,6 +37,12 @@ struct Named_Texture
 {
     std::string name;
     SDL_GPUTextureSamplerBinding sampler;
+};
+
+struct Named_VBO
+{
+    std::string name;
+    VertexBuffer_Struct vertexBuffer;
 };
 
 // Flags for PixL_Renderer_Init
@@ -76,9 +86,11 @@ protected:
     std::vector<Named_Pipeline> _pipelines;
     std::vector<Named_DepthBuffer> _depthBuffers;
     std::vector<Named_Texture> _textures;
+    std::vector<Named_VBO> _VBOs;
 
     // friend functions
-    friend int PixL_Renderer_Init(uint32_t flags);
+    friend int
+    PixL_Renderer_Init(uint32_t flags);
     friend int PixL_Renderer_Quit();
     friend SDL_Window *CreateWindow(const char *title, int w, int h, Uint32 flags);
     friend SDL_Window *GetWindow();
@@ -126,13 +138,23 @@ protected:
     friend bool PixL_CreateDepthBuffer(std::string name);
     friend bool PixL_DestroyDepthBuffer(std::string name);
     friend bool PixL_CreateTexture(std::string name, std::string imagePath);
-    friend bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBufferName, bool needDepthBuffer);
+    friend bool PixL_CreateBlankTexture(std::string name, int width, int height, SDL_GPUTextureUsageFlags usage);
+    friend bool PixL_DestroyTexture(std::string name);
+
+    friend bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBufferName, bool needDepthBuffer, bool clearBuffers);
     friend bool PixL_EndRenderPass();
+    friend bool PixL_Pipelines_Layout_Compatibility(std::string Pipeline1, std::string Pipeline2);
+
+    friend bool PixL_CreateVBO(std::string name, size_t size);
+    friend bool PixL_DestroyVBO(std::string name);
+    friend VertexBuffer_Struct *PixL_GetVBO(std::string name);
 
     friend int PixL_GetDrawCalls();
 
     friend bool PixL_2D_Init(uint32_t flags);
     friend class PixL_2D;
+
+    friend glm::vec2 PixL_GetWindowSize();
 
     // callbacks
     friend void PixL_Callback_WindowResized();
@@ -189,12 +211,20 @@ bool PixL_DrawIndexed(
 bool PixL_StartDraw();
 void PixL_SwapBuffers();
 bool PixL_CreatePipeline(std::string name, Shader_Struct *vertexShader, Shader_Struct *fragmentShader, bool depthTest = false, SDL_GPUCompareOp compareOp = SDL_GPU_COMPAREOP_LESS, bool enable_depth_test = true, bool enable_depth_write = true);
+bool PixL_Pipelines_Layout_Compatibility(std::string Pipeline1, std::string Pipeline2);
 bool PixL_DestroyPipeline(std::string name);
 bool PixL_CreateDepthBuffer(std::string name);
 bool PixL_DestroyDepthBuffer(std::string name);
 bool PixL_CreateTexture(std::string name, std::string imagePath);
-bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBufferName, bool needDepthBuffer);
+bool PixL_CreateBlankTexture(std::string name, int width, int height, SDL_GPUTextureUsageFlags usage = SDL_GPU_TEXTUREUSAGE_SAMPLER);
+bool PixL_DestroyTexture(std::string name);
+bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBufferName, bool needDepthBuffer, bool clearBuffers = false);
 bool PixL_EndRenderPass();
+bool PixL_CreateVBO(std::string name, size_t size);
+bool PixL_DestroyVBO(std::string name);
+VertexBuffer_Struct *PixL_GetVBO(std::string name);
+
+glm::vec2 PixL_GetWindowSize();
 
 int PixL_GetDrawCalls();
 
