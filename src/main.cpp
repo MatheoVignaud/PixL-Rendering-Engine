@@ -22,6 +22,12 @@ int main(int argc, char *argv[])
 
 	PixL_CreateVBO("default", sizeof(glm::vec2) * 6);
 
+	PixL_CreatePipeline("basic", &basic_vertex, &basic_fragment, false, SDL_GPU_COMPAREOP_LESS, false, false);
+
+	PixL_CreateTexture("test_texture", "test.png");
+
+	PixL_2D_Init();
+
 	bool quit = false;
 	while (!quit)
 	{
@@ -39,34 +45,24 @@ int main(int argc, char *argv[])
 			}
 		}
 
+		PixL_2D_AddDrawable(
+			0, 0, "Fullscreen", [](void *user_data)
+			{ PixL_Draw(
+				  "Fullscreen",
+				  "",
+				  "",
+				  1,
+				  6,
+				  nullptr,
+				  {},
+				  nullptr,
+				  {"test_texture"},
+				  {},
+				  nullptr); },
+			nullptr);
+
 		PixL_StartDraw();
-
-		for (int i = 0; i < 2; i++)
-		{
-			// create random vertex data
-			// between -1 and 1
-
-			std::vector<glm::vec2> vertices = {
-				glm::vec2(
-					(float)(rand() % 2000) / 1000.0f - 1.0f,
-					(float)(rand() % 2000) / 1000.0f - 1.0f),
-				glm::vec2(
-					(float)(rand() % 2000) / 1000.0f - 1.0f,
-					(float)(rand() % 2000) / 1000.0f - 1.0f),
-				glm::vec2(
-					(float)(rand() % 2000) / 1000.0f - 1.0f,
-					(float)(rand() % 2000) / 1000.0f - 1.0f),
-				glm::vec2(
-					(float)(rand() % 2000) / 1000.0f - 1.0f,
-					(float)(rand() % 2000) / 1000.0f - 1.0f),
-				glm::vec2(
-					(float)(rand() % 2000) / 1000.0f - 1.0f,
-					(float)(rand() % 2000) / 1000.0f - 1.0f),
-				glm::vec2(
-					(float)(rand() % 2000) / 1000.0f - 1.0f,
-					(float)(rand() % 2000) / 1000.0f - 1.0f)};
-		}
-
+		PixL_2D_Render();
 		PixL_SwapBuffers();
 
 		// print time taken and fps

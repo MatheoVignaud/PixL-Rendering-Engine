@@ -122,11 +122,6 @@ bool PixL_Draw(
         SDL_Log("PixL_Renderer not drawing. Call PixL_StartDraw() first.");
         return false;
     }
-    bool unique_renderPass = false;
-    if (PixL_Renderer::_instance->renderPass == nullptr)
-    {
-        unique_renderPass = true;
-    }
 
     // Find the pipeline
     Named_Pipeline *pipeline = nullptr;
@@ -171,15 +166,6 @@ bool PixL_Draw(
         return false;
     }
 
-    if (unique_renderPass)
-    {
-        if (!PixL_StartRenderPass(RenderTextureName, DepthBufferName, pipeline->needDepthBuffer))
-        {
-            SDL_Log("Could not start render pass: %s", SDL_GetError());
-            return false;
-        }
-    }
-
     // Bind the pipeline
     SDL_BindGPUGraphicsPipeline(PixL_Renderer::_instance->renderPass, pipeline->pipeline);
     // Bind the vertex buffer
@@ -220,11 +206,6 @@ bool PixL_Draw(
         instanceCount,
         0,
         0);
-
-    if (unique_renderPass)
-    {
-        PixL_EndRenderPass();
-    }
 
     if (!PixL_Renderer::_instance->depthBufferClear && pipeline->needDepthBuffer)
     {
@@ -267,11 +248,6 @@ bool PixL_DrawIndexed(
         SDL_Log("PixL_Renderer not drawing. Call PixL_StartDraw() first.");
         return false;
     }
-    bool unique_renderPass = false;
-    if (PixL_Renderer::_instance->renderPass == nullptr)
-    {
-        unique_renderPass = true;
-    }
 
     // Find the pipeline
     Named_Pipeline *pipeline = nullptr;
@@ -313,14 +289,6 @@ bool PixL_DrawIndexed(
     {
         SDL_Log("Fragment buffer sampler count mismatch. Expected %d, got %zu", pipeline->fragmentShader_Sampler_Count, fragmentBufferSamplers.size());
         return false;
-    }
-    if (unique_renderPass)
-    {
-        if (!PixL_StartRenderPass(RenderTextureName, DepthBufferName, pipeline->needDepthBuffer))
-        {
-            SDL_Log("Could not start render pass: %s", SDL_GetError());
-            return false;
-        }
     }
 
     // Bind the pipeline
@@ -369,11 +337,6 @@ bool PixL_DrawIndexed(
         0,
         0,
         0);
-
-    if (unique_renderPass)
-    {
-        PixL_EndRenderPass();
-    }
     PixL_Renderer::_instance->_drawCalls++;
 
     if (!PixL_Renderer::_instance->depthBufferClear & pipeline->needDepthBuffer)
@@ -726,6 +689,8 @@ bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBuffer
                                                                   &colorTargetInfo,
                                                                   1,
                                                                   depthBuffer ? &depthStencilTargetInfo : NULL);
+
+    std::cout << "Starting render pass" << std::endl;
     return true;
 }
 

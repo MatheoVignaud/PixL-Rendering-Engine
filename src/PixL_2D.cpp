@@ -17,9 +17,16 @@ PixL_2D *PixL_2D::_instance = nullptr;
 
 PixL_2D::~PixL_2D()
 {
+    // Clean up all layers and their textures
+    for (auto &layer : layers)
+    {
+        PixL_DestroyTexture(layer.second._TextureName);
+    }
+    layers.clear();
+    drawables_order.clear();
 }
 
-void PixL_2D::initLayer(uint8_t layer_id, uint8_t width, uint8_t height)
+void PixL_2D::initLayer(uint8_t layer_id, uint16_t width, uint16_t height)
 {
     if (layers.find(layer_id) != layers.end())
     {
@@ -40,7 +47,7 @@ void PixL_2D::initLayer(uint8_t layer_id, uint8_t width, uint8_t height)
         layer_height = height;
     }
 
-    PixL_CreateBlankTexture("Layer_" + std::to_string(layer_id), width, height, SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER);
+    PixL_CreateBlankTexture("Layer_" + std::to_string(layer_id), layer_width, layer_height, SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER);
 
     layer._TextureName = "Layer_" + std::to_string(layer_id);
 
@@ -59,12 +66,22 @@ void PixL_2D::renderLayer(uint8_t layer_id)
 
     Layer &layer = layers[layer_id];
 
-    // draw drawables , take care of z_index
-    std::sort(layer.drawables.begin(), layer.drawables.end(), [](const DrawableWrapper &a, const DrawableWrapper &b)
+    std::vector<DrawableWrapper> drawables = layer.drawables;
+    drawables.insert(drawables.end(), layer.pipeline_drawables.begin(), layer.pipeline_drawables.end());
+    std::sort(drawables.begin(), drawables.end(), [](const DrawableWrapper &a, const DrawableWrapper &b)
               { return a.z_index < b.z_index; });
 
-    // start render pass
     bool needToClear = true;
+    if (cleared_layers.find(layer_id) != cleared_layers.end())
+    {
+        needToClear = false;
+    }
+    else
+    {
+        cleared_layers.insert(layer_id);
+    }
+
+    bool render_pass_started = false;
 
     for (const auto &drawable : layer.drawables)
     {
@@ -76,12 +93,13 @@ void PixL_2D::renderLayer(uint8_t layer_id)
             }
             if (needToClear)
             {
-                PixL_StartRenderPass(layer._TextureName, "", true, true);
+                PixL_StartRenderPass(layer._TextureName, "", false, true);
             }
             else
             {
-                PixL_StartRenderPass(layer._TextureName, "", true, false);
+                PixL_StartRenderPass(layer._TextureName, "", false, false);
             }
+            render_pass_started = true;
         }
 
         if (drawable.callback)
@@ -89,11 +107,14 @@ void PixL_2D::renderLayer(uint8_t layer_id)
             drawable.callback(drawable.user_data);
         }
     }
-    PixL_EndRenderPass();
+    if (render_pass_started)
+    {
+        PixL_EndRenderPass();
+    }
     last_pipeline_name = "";
 }
 
-void PixL_2D::applyLayerEffects(uint8_t layer_id, Layer &layer)
+void PixL_2D::applyLayerEffects(uint8_t layer_id)
 {
     // Check if the layer exists
     if (layers.find(layer_id) == layers.end())
@@ -101,28 +122,70 @@ void PixL_2D::applyLayerEffects(uint8_t layer_id, Layer &layer)
         return; // Layer not found
     }
 
-    // Apply effects to the layer
-    for (const auto &effect : layer.effects)
+    Layer &layer = layers[layer_id];
+
+    std::vector<LayerEffect> effects = layer.effects;
+    effects.insert(effects.end(), layer.pipeline_effects.begin(), layer.pipeline_effects.end());
+    std::sort(effects.begin(), effects.end(), [](const LayerEffect &a, const LayerEffect &b)
+              { return a.z_index < b.z_index; });
+
+    bool needToClear = true;
+    if (cleared_layers.find(layer_id) != cleared_layers.end())
     {
+        needToClear = false;
+    }
+    else
+    {
+        cleared_layers.insert(layer_id);
+    }
+
+    bool render_pass_started = false;
+
+    for (const auto &effect : effects)
+    {
+        if (last_pipeline_name != effect.pipeline)
+        {
+            if (last_pipeline_name != "")
+            {
+                PixL_EndRenderPass();
+            }
+            if (needToClear)
+            {
+                PixL_StartRenderPass(layer._TextureName, "", false, true);
+            }
+            else
+            {
+                PixL_StartRenderPass(layer._TextureName, "", false, false);
+            }
+            render_pass_started = true;
+        }
+
         if (effect.callback)
         {
             effect.callback(effect.user_data);
         }
     }
+    if (render_pass_started)
+    {
+        PixL_EndRenderPass();
+    }
+
+    last_pipeline_name = "";
 }
 
 void PixL_2D::compositeLayers()
 {
     PixL_StartRenderPass("", "", false);
     // Composite all layers to final output, start with highest layer
-    for (int i = layers.size() - 1; i >= 0; --i)
+    for (int i = 255; i > 0; --i)
     {
-        std::string layer_name = this->getLayerTextureName(i);
-        if (layer_name != "")
+        if (layers.find(i) != layers.end())
         {
-
-            PixL_Draw(
-                "Fullscreen", "", "", 1, 6, nullptr, {}, nullptr, {layer_name}, {}, nullptr);
+            if (layers[i].is_composite)
+            {
+                PixL_Draw(
+                    "Fullscreen", "", "", 1, 6, nullptr, {}, nullptr, {layers[i]._TextureName}, {}, nullptr);
+            }
         }
     }
     PixL_EndRenderPass();
@@ -140,7 +203,7 @@ void PixL_2D::addDrawable(uint8_t layer_id, uint16_t z_index, const std::string 
     layers[layer_id].drawables.push_back({z_index, pipeline_name, callback, user_data});
 }
 
-void PixL_2D::addLayerEffect(uint8_t layer_id, PixL_2D_EffectCallback callback, void *user_data)
+void PixL_2D::addLayerEffect(uint8_t layer_id, uint16_t z_index, const std::string &pipeline_name, PixL_2D_EffectCallback callback, void *user_data)
 {
 
     // Check if the layer exists
@@ -150,7 +213,7 @@ void PixL_2D::addLayerEffect(uint8_t layer_id, PixL_2D_EffectCallback callback, 
     }
 
     // Add effect to the layer
-    layers[layer_id].effects.push_back({callback, user_data});
+    layers[layer_id].effects.push_back({z_index, pipeline_name, callback, user_data});
 }
 
 std::string PixL_2D::getLayerTextureName(uint8_t layer_id)
@@ -219,7 +282,32 @@ bool PixL_2D::use_default_PixL_2D_Pipeline()
     return use_PixL_2D_Pipeline(default_pipeline);
 }
 
-void PixL_2D::render() {
+void PixL_2D::Callback_WindowResized()
+{
+}
+
+void PixL_2D::render()
+{
+
+    for (const auto &order : drawables_order)
+    {
+        if (layers.find(order.first) != layers.end())
+        {
+            if (order.second == PixL_2D_DrawableType::PIXL_2D_DRAWABLE)
+            {
+                renderLayer(order.first);
+            }
+            else if (order.second == PixL_2D_DrawableType::PIXL_2D_EFFECT)
+            {
+                applyLayerEffects(order.first);
+            }
+        }
+    }
+
+    compositeLayers();
+
+    cleared_layers.clear();
+    last_pipeline_name = "";
 };
 
 bool PixL_2D_Init()
@@ -253,14 +341,14 @@ void PixL_2D_AddDrawable(uint8_t layer_id, uint16_t z_index, const char *pipelin
     PixL_2D::_instance->addDrawable(layer_id, z_index, std::string(pipeline_name), callback, user_data);
 }
 
-void PixL_2D_AddLayerEffect(uint8_t layer_id, PixL_2D_EffectCallback effect_callback, void *user_data)
+void PixL_2D_AddLayerEffect(uint8_t layer_id, uint16_t z_index, const std::string &pipeline_name, PixL_2D_EffectCallback effect_callback, void *user_data)
 {
     if (PixL_2D::_instance == nullptr)
     {
         return; // PixL_2D not initialized
     }
 
-    PixL_2D::_instance->addLayerEffect(layer_id, effect_callback, user_data);
+    PixL_2D::_instance->addLayerEffect(layer_id, z_index, pipeline_name, effect_callback, user_data);
 }
 
 std::string PixL_2D_GetLayerTexture(uint8_t layer_id)
@@ -271,6 +359,20 @@ std::string PixL_2D_GetLayerTexture(uint8_t layer_id)
     }
 
     return PixL_2D::_instance->getLayerTextureName(layer_id);
+}
+
+void PixL_2D_Render()
+{
+    if (PixL_2D::_instance == nullptr)
+    {
+        return; // PixL_2D not initialized
+    }
+
+    PixL_2D::_instance->render();
+}
+
+void PixL_2D_Callback_WindowResized()
+{
 }
 
 bool PixL_2D_Pipeline::validate()

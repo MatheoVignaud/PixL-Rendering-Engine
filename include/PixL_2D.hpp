@@ -34,10 +34,16 @@ extern "C"
 
     void PixL_2D_AddLayerEffect(
         uint8_t layer_id,
+        uint16_t z_index,
+        const std::string &pipeline_name,
         PixL_2D_EffectCallback effect_callback,
         void *user_data);
 
     std::string PixL_2D_GetLayerTexture(uint8_t layer_id);
+
+    void PixL_2D_Render();
+
+    void PixL_2D_Callback_WindowResized();
 
 #ifdef __cplusplus
 }
@@ -56,6 +62,8 @@ struct DrawableWrapper
 // Layer effect information
 struct LayerEffect
 {
+    uint16_t z_index;
+    std::string pipeline;
     PixL_2D_EffectCallback callback;
     void *user_data;
 };
@@ -108,18 +116,20 @@ private:
     std::string last_pipeline_name;
     std::vector<std::pair<uint8_t, PixL_2D_DrawableType>> drawables_order;
 
+    std::set<uint8_t> cleared_layers;
+
 protected:
     PixL_2D();
     ~PixL_2D();
 
     // Initialize layer with its render target
-    void initLayer(uint8_t layer_id, uint8_t width = 0, uint8_t height = 0);
+    void initLayer(uint8_t layer_id, uint16_t width = 800, uint16_t height = 400);
 
     // Render a single layer to its texture
     void renderLayer(uint8_t layer_id);
 
     // Apply all effects to a layer
-    void applyLayerEffects(uint8_t layer_id, Layer &layer);
+    void applyLayerEffects(uint8_t layer_id);
 
     // Composite all layers to final output
     void compositeLayers();
@@ -133,6 +143,8 @@ protected:
 
     // Add effect to a specific layer
     void addLayerEffect(uint8_t layer_id,
+                        uint16_t z_index,
+                        const std::string &pipeline_name,
                         PixL_2D_EffectCallback callback,
                         void *user_data);
 
@@ -142,8 +154,11 @@ protected:
     bool use_PixL_2D_Pipeline(PixL_2D_Pipeline &pipeline);
     bool use_default_PixL_2D_Pipeline();
 
+    void Callback_WindowResized();
+
     // Render all layers
     void render();
+    //
 
     // C API
     friend bool PixL_2D_Init();
@@ -157,9 +172,13 @@ protected:
         void *user_data);
     friend void PixL_2D_AddLayerEffect(
         uint8_t layer_id,
+        uint16_t z_index,
+        const std::string &pipeline_name,
         PixL_2D_EffectCallback effect_callback,
         void *user_data);
     friend std::string PixL_2D_GetLayerTexture(uint8_t layer_id);
+    friend void PixL_2D_Render();
+    friend void PixL_2D_Callback_WindowResized();
 };
 
 #endif // __cplusplus
