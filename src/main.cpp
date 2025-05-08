@@ -14,8 +14,6 @@ int main(int argc, char *argv[])
 
 	PixL_2D_Init();
 
-	PixL_CreateTexture("test_texture", "test.png");
-
 	auto start = std::chrono::high_resolution_clock::now();
 
 	PixL_Callback_WindowResized();
@@ -75,7 +73,7 @@ int main(int argc, char *argv[])
 		std::cout << "Draw Calls: " << PixL_GetDrawCalls() << std::endl;
 		std::cout << "------------------------" << std::endl;
 	}
-
+	PixL_2D_Quit();
 	PixL_Renderer_Quit();
 
 	return 0;

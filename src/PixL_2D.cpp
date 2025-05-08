@@ -100,6 +100,7 @@ void PixL_2D::renderLayer(uint8_t layer_id)
                 PixL_StartRenderPass(layer._TextureName, "", false, false);
             }
             render_pass_started = true;
+            last_pipeline_name = drawable.pipeline;
         }
 
         if (drawable.callback)
@@ -158,6 +159,7 @@ void PixL_2D::applyLayerEffects(uint8_t layer_id)
                 PixL_StartRenderPass(layer._TextureName, "", false, false);
             }
             render_pass_started = true;
+            last_pipeline_name = effect.pipeline;
         }
 
         if (effect.callback)
@@ -175,9 +177,9 @@ void PixL_2D::applyLayerEffects(uint8_t layer_id)
 
 void PixL_2D::compositeLayers()
 {
-    PixL_StartRenderPass("", "", false);
+    PixL_StartRenderPass("", "", false, true); // Start composite render pass
     // Composite all layers to final output, start with highest layer
-    for (int i = 255; i > 0; --i)
+    for (int i = 255; i >= 0; --i)
     {
         if (layers.find(i) != layers.end())
         {
@@ -308,6 +310,12 @@ void PixL_2D::render()
 
     cleared_layers.clear();
     last_pipeline_name = "";
+
+    for (auto &layer : layers)
+    {
+        layer.second.drawables.clear();
+        layer.second.effects.clear();
+    }
 };
 
 bool PixL_2D_Init()
