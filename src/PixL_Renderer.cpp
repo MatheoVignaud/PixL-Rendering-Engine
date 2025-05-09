@@ -34,6 +34,8 @@ PixL_Renderer::~PixL_Renderer()
     {
         depthBuffer.depthBuffer.Destroy(_device);
     }
+    SDL_DestroyGPUDevice(_device);
+    SDL_DestroyWindow(_window);
 }
 
 int PixL_Renderer_Init(uint32_t flags)
@@ -43,6 +45,7 @@ int PixL_Renderer_Init(uint32_t flags)
         PixL_Renderer::_instance = new PixL_Renderer();
     }
     PixL_Renderer::_instance->_flags = flags;
+
     return 0;
 }
 
@@ -661,7 +664,7 @@ bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBuffer
     // Create the render pass but take in account the number of draw calls
     SDL_GPUColorTargetInfo colorTargetInfo = {0};
     colorTargetInfo.texture = renderTexture;
-    colorTargetInfo.clear_color = (SDL_FColor){0.0f, 0.0f, 0.0f, 1.0f};
+    colorTargetInfo.clear_color = (SDL_FColor){0.0f, 0.0f, 0.0f, 0.0f};
     if (PixL_Renderer::_instance->_drawCalls == 0 || clearBuffers)
     {
         colorTargetInfo.load_op = SDL_GPU_LOADOP_CLEAR;
@@ -896,6 +899,4 @@ void PixL_Callback_WindowResized()
         return;
     }
     SDL_GetWindowSize(PixL_Renderer::_instance->_window, &PixL_Renderer::_instance->window_width, &PixL_Renderer::_instance->window_height);
-
-    // Appeler la fonction de redimensionnement des textures des layers 2D
 }

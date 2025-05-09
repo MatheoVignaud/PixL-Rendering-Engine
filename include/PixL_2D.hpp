@@ -73,7 +73,7 @@ struct Layer
 {
     std::string _TextureName;
 
-    // pipeline_drawables and pipeline_effects are permanent
+    bool fixed_size = false;
 
     std::vector<DrawableWrapper> pipeline_drawables;
     std::vector<DrawableWrapper> drawables;
@@ -88,7 +88,13 @@ struct PixL_2D_Pipeline_Layer
     uint8_t layer_id;
     std::vector<DrawableWrapper> drawables;
     std::vector<LayerEffect> effects;
+
     bool is_composite = false;
+
+    // if the size is 0, the layer will be resized to the window size
+    // else the layer will be resized to the size given
+    uint16_t width = 0;
+    uint16_t height = 0;
 };
 
 enum class PixL_2D_DrawableType
@@ -123,7 +129,7 @@ protected:
     ~PixL_2D();
 
     // Initialize layer with its render target
-    void initLayer(uint8_t layer_id, uint16_t width = 800, uint16_t height = 400);
+    void initLayer(uint8_t layer_id, uint16_t width = 0, uint16_t height = 0);
 
     // Render a single layer to its texture
     void renderLayer(uint8_t layer_id);

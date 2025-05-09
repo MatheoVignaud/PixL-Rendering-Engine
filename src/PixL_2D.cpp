@@ -112,6 +112,11 @@ void PixL_2D::renderLayer(uint8_t layer_id)
     {
         PixL_EndRenderPass();
     }
+    else
+    {
+        PixL_StartRenderPass(layer._TextureName, "", false, true);
+        PixL_EndRenderPass();
+    }
     last_pipeline_name = "";
 }
 
@@ -179,7 +184,7 @@ void PixL_2D::compositeLayers()
 {
     PixL_StartRenderPass("", "", false, true); // Start composite render pass
     // Composite all layers to final output, start with highest layer
-    for (int i = 255; i >= 0; --i)
+    for (int i = 0; i <= 255; i++)
     {
         if (layers.find(i) != layers.end())
         {
@@ -249,11 +254,20 @@ bool PixL_2D::use_PixL_2D_Pipeline(PixL_2D_Pipeline &pipeline)
 
     for (const auto &layer : pipeline.layers)
     {
+
         // Initialize each layer with its render target
-        initLayer(layer.layer_id);
+        initLayer(layer.layer_id, layer.width, layer.height);
         layers[layer.layer_id].is_composite = layer.is_composite;
         layers[layer.layer_id].drawables = layer.drawables;
         layers[layer.layer_id].effects = layer.effects;
+        if (layer.width != 0 && layer.height != 0)
+        {
+            layers[layer.layer_id].fixed_size = true;
+        }
+        else
+        {
+            layers[layer.layer_id].fixed_size = false;
+        }
     }
 
     for (const auto &drawable : pipeline.drawables_order)
@@ -269,9 +283,9 @@ bool PixL_2D::use_default_PixL_2D_Pipeline()
     PixL_2D_Pipeline default_pipeline = {
         "Default",
         {
-            {0, {}, {}, true},
-            {1, {}, {}, true},
-            {2, {}, {}, true},
+            {0, {}, {}, true, 0, 0},
+            {1, {}, {}, true, 0, 0},
+            {2, {}, {}, true, 0, 0},
         },
         {{0, PixL_2D_DrawableType::PIXL_2D_DRAWABLE},
          {1, PixL_2D_DrawableType::PIXL_2D_DRAWABLE},
@@ -286,6 +300,14 @@ bool PixL_2D::use_default_PixL_2D_Pipeline()
 
 void PixL_2D::Callback_WindowResized()
 {
+    for (auto &layer : layers)
+    {
+        if (!layer.second.fixed_size)
+        {
+            PixL_DestroyTexture(layer.second._TextureName);
+            PixL_CreateBlankTexture(layer.second._TextureName, PixL_Renderer::_instance->window_width, PixL_Renderer::_instance->window_height, SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER);
+        }
+    }
 }
 
 void PixL_2D::render()
@@ -381,6 +403,12 @@ void PixL_2D_Render()
 
 void PixL_2D_Callback_WindowResized()
 {
+    if (PixL_2D::_instance == nullptr)
+    {
+        return; // PixL_2D not initialized
+    }
+
+    PixL_2D::_instance->Callback_WindowResized();
 }
 
 bool PixL_2D_Pipeline::validate()

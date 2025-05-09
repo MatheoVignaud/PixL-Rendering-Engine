@@ -31,25 +31,12 @@ SDL_GPUTextureSamplerBinding CreateSamplerFromImage(SDL_GPUDevice *device, std::
         surface = convertedSurface;
     }
 
-    // invert the image
-    SDL_LockSurface(surface);
-    for (int y = 0; y < surface->h / 2; y++)
-    {
-        for (int x = 0; x < surface->w; x++)
-        {
-            Uint32 *topPixel = (Uint32 *)((Uint8 *)surface->pixels + y * surface->pitch + x * 4);
-            Uint32 *bottomPixel = (Uint32 *)((Uint8 *)surface->pixels + (surface->h - y - 1) * surface->pitch + x * 4);
-            Uint32 temp = *topPixel;
-            *topPixel = *bottomPixel;
-            *bottomPixel = temp;
-        }
-    }
     SDL_UnlockSurface(surface);
 
     // create a texture from the surface
     SDL_GPUTransferBufferCreateInfo transferBufferInfo = {
         .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-        .size = surface->w * surface->h * 4};
+        .size = (uint32_t)surface->w * (uint32_t)surface->h * 4};
 
     SDL_GPUTransferBuffer *textureTransferBuffer = SDL_CreateGPUTransferBuffer(device, &transferBufferInfo);
 

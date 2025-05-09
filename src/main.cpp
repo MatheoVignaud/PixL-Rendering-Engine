@@ -5,18 +5,17 @@
 int main(int argc, char *argv[])
 {
 	PixL_Renderer_Init(0);
-	SDL_Window *window = CreateWindow("PixL Renderer", 800, 600, SDL_WINDOW_RESIZABLE);
+	SDL_Window *window = CreateWindow("PixL Renderer", 50, 50, SDL_WINDOW_RESIZABLE);
 	if (!window)
 	{
 		SDL_Log("Could not create window: %s", SDL_GetError());
 		return -1;
 	}
+	PixL_Callback_WindowResized();
 
 	PixL_2D_Init();
 
 	auto start = std::chrono::high_resolution_clock::now();
-
-	PixL_Callback_WindowResized();
 
 	PixL_CreateVBO("default", sizeof(glm::vec2) * 6);
 
@@ -40,6 +39,7 @@ int main(int argc, char *argv[])
 			else if (event.type == SDL_EVENT_WINDOW_RESIZED)
 			{
 				PixL_Callback_WindowResized();
+				PixL_2D_Callback_WindowResized();
 			}
 		}
 
