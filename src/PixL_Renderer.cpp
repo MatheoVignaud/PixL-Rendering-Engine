@@ -215,7 +215,7 @@ bool PixL_Draw(
         PixL_Renderer::_instance->depthBufferClear = true;
     }
     PixL_Renderer::_instance->_drawCalls++;
-    std::cout << "Draw with pipeline " << PipelineName << " with " << vertexCount << " vertices and " << instanceCount << " instances" << std::endl;
+    // std::cout << "Draw with pipeline " << PipelineName << " with " << vertexCount << " vertices and " << instanceCount << " instances" << std::endl;
     return true;
 }
 
@@ -693,7 +693,7 @@ bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBuffer
                                                                   1,
                                                                   depthBuffer ? &depthStencilTargetInfo : NULL);
 
-    std::cout << "Starting render pass" << std::endl;
+    // std::cout << "Starting render pass" << std::endl;
     return true;
 }
 
@@ -716,7 +716,7 @@ bool PixL_EndRenderPass()
         return false;
     }
 
-    std::cout << "Ending render pass" << std::endl;
+    // std::cout << "Ending render pass" << std::endl;
     SDL_EndGPURenderPass(PixL_Renderer::_instance->renderPass);
     PixL_Renderer::_instance->renderPass = nullptr;
     return true;
