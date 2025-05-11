@@ -168,7 +168,7 @@ struct DepthBuffer_Struct
     }
 };
 
-SDL_GPUTextureSamplerBinding CreateSamplerFromImage(SDL_GPUDevice *device, std::string image_Path);
+SDL_GPUTextureSamplerBinding CreateSamplerFromImage(SDL_GPUDevice *device, std::string image_Path, uint32_t *getWidth = nullptr, uint32_t *getHeight = nullptr);
 SDL_GPUTextureSamplerBinding CreateBlankSampler(SDL_GPUDevice *device, SDL_GPUTextureFormat format, uint32_t width, uint32_t height, SDL_GPUTextureUsageFlags usage = SDL_GPU_TEXTUREUSAGE_SAMPLER);
 TransferBuffer_Struct CreateUBO(SDL_GPUDevice *device, size_t size);
 VertexBuffer_Struct CreateVBO(SDL_GPUDevice *device, size_t size);
@@ -178,3 +178,4 @@ SDL_GPUShader *LoadShader(
     Shader_Struct *shader);
 SDL_GPUGraphicsPipeline *CreatePipeline(SDL_GPUDevice *device, SDL_Window *window, Shader_Struct *vertexShader, Shader_Struct *fragmentShader, bool depthTest = false, SDL_GPUCompareOp compareOp = SDL_GPU_COMPAREOP_LESS, bool enable_depth_test = true, bool enable_depth_write = true);
 DepthBuffer_Struct *CreateDepthBuffer(SDL_GPUDevice *device, uint32_t width, uint32_t height);
+bool UpdateTexture(SDL_GPUDevice *device, SDL_GPUTextureSamplerBinding *texture, uint32_t width, uint32_t height, void *data, size_t size);

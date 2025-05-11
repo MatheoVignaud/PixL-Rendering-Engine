@@ -523,15 +523,18 @@ bool PixL_CreateTexture(std::string name, std::string imagePath)
             return false;
         }
     }
+    // Get the width and height of the texture
+    uint32_t width = 0;
+    uint32_t height = 0;
 
-    SDL_GPUTextureSamplerBinding sampler = CreateSamplerFromImage(PixL_Renderer::_instance->_device, imagePath);
+    SDL_GPUTextureSamplerBinding sampler = CreateSamplerFromImage(PixL_Renderer::_instance->_device, imagePath, &width, &height);
     if (!sampler.texture)
     {
         SDL_Log("Could not create texture: %s", SDL_GetError());
         return false;
     }
 
-    Named_Texture named_texture = {name, sampler};
+    Named_Texture named_texture = {name, sampler, width, height};
     PixL_Renderer::_instance->_textures.push_back(named_texture);
 
     SDL_Log("Texture %s created successfully", name.c_str());
@@ -539,7 +542,7 @@ bool PixL_CreateTexture(std::string name, std::string imagePath)
     return true;
 }
 
-bool PixL_CreateBlankTexture(std::string name, int width, int height, SDL_GPUTextureUsageFlags usage)
+bool PixL_CreateBlankTexture(std::string name, int width, int height, SDL_GPUTextureUsageFlags usage, SDL_GPUTextureFormat format)
 {
     if (!PixL_Renderer::_instance)
     {
@@ -556,19 +559,37 @@ bool PixL_CreateBlankTexture(std::string name, int width, int height, SDL_GPUTex
         }
     }
 
-    SDL_GPUTextureSamplerBinding sampler = CreateBlankSampler(PixL_Renderer::_instance->_device, SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM, width, height, usage);
+    SDL_GPUTextureSamplerBinding sampler = CreateBlankSampler(PixL_Renderer::_instance->_device, format, width, height, usage);
     if (!sampler.texture)
     {
         SDL_Log("Could not create texture: %s", SDL_GetError());
         return false;
     }
 
-    Named_Texture named_texture = {name, sampler};
+    Named_Texture named_texture = {name, sampler, (uint32_t)width, (uint32_t)height};
     PixL_Renderer::_instance->_textures.push_back(named_texture);
 
     SDL_Log("Texture %s created successfully", name.c_str());
 
     return true;
+}
+
+bool PixL_UpdateTexture(std::string name, void *data, size_t size)
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    for (auto &texture : PixL_Renderer::_instance->_textures)
+    {
+        if (texture.name == name)
+        {
+            UpdateTexture(PixL_Renderer::_instance->_device, &texture.sampler, texture.width, texture.height, data, size);
+        }
+    }
+    SDL_Log("Texture %s not found", name.c_str());
+    return false;
 }
 
 bool PixL_DestroyTexture(std::string name)

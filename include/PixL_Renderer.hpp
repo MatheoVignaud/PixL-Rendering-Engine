@@ -37,6 +37,8 @@ struct Named_Texture
 {
     std::string name;
     SDL_GPUTextureSamplerBinding sampler;
+    uint32_t width = 0;
+    uint32_t height = 0;
 };
 
 struct Named_VBO
@@ -138,7 +140,8 @@ protected:
     friend bool PixL_CreateDepthBuffer(std::string name);
     friend bool PixL_DestroyDepthBuffer(std::string name);
     friend bool PixL_CreateTexture(std::string name, std::string imagePath);
-    friend bool PixL_CreateBlankTexture(std::string name, int width, int height, SDL_GPUTextureUsageFlags usage);
+    friend bool PixL_CreateBlankTexture(std::string name, int width, int height, SDL_GPUTextureUsageFlags usage, SDL_GPUTextureFormat format);
+    friend bool PixL_UpdateTexture(std::string name, void *data, size_t size);
     friend bool PixL_DestroyTexture(std::string name);
 
     friend bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBufferName, bool needDepthBuffer, bool clearBuffers);
@@ -216,7 +219,8 @@ bool PixL_DestroyPipeline(std::string name);
 bool PixL_CreateDepthBuffer(std::string name);
 bool PixL_DestroyDepthBuffer(std::string name);
 bool PixL_CreateTexture(std::string name, std::string imagePath);
-bool PixL_CreateBlankTexture(std::string name, int width, int height, SDL_GPUTextureUsageFlags usage = SDL_GPU_TEXTUREUSAGE_SAMPLER);
+bool PixL_CreateBlankTexture(std::string name, int width, int height, SDL_GPUTextureUsageFlags usage = SDL_GPU_TEXTUREUSAGE_SAMPLER, SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM);
+bool PixL_UpdateTexture(std::string name, void *data, size_t size);
 bool PixL_DestroyTexture(std::string name);
 bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBufferName, bool needDepthBuffer, bool clearBuffers = false);
 bool PixL_EndRenderPass();

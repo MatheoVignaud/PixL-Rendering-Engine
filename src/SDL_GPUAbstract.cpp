@@ -1,6 +1,6 @@
 #include <SDL_GPUAbstract.hpp>
 
-SDL_GPUTextureSamplerBinding CreateSamplerFromImage(SDL_GPUDevice *device, std::string image_Path)
+SDL_GPUTextureSamplerBinding CreateSamplerFromImage(SDL_GPUDevice *device, std::string image_Path, uint32_t *getWidth, uint32_t *getHeight)
 {
     SDL_Surface *surface = IMG_Load(image_Path.c_str());
     if (surface == NULL)
@@ -29,6 +29,15 @@ SDL_GPUTextureSamplerBinding CreateSamplerFromImage(SDL_GPUDevice *device, std::
 
         // set the converted surface as the new surface
         surface = convertedSurface;
+    }
+
+    if (getWidth != nullptr)
+    {
+        *getWidth = surface->w;
+    }
+    if (getHeight != nullptr)
+    {
+        *getHeight = surface->h;
     }
 
     SDL_UnlockSurface(surface);
@@ -385,4 +394,52 @@ DepthBuffer_Struct *CreateDepthBuffer(SDL_GPUDevice *device, uint32_t width, uin
         &samplerCreateInfo);
 
     return DepthBuffer;
-};
+}
+
+bool UpdateTexture(SDL_GPUDevice *device, SDL_GPUTextureSamplerBinding *texture, uint32_t width, uint32_t height, void *data, size_t size)
+{
+    SDL_GPUTransferBufferCreateInfo transferBufferInfo = {};
+    transferBufferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    transferBufferInfo.size = size;
+
+    SDL_GPUTransferBuffer *transferBuffer = SDL_CreateGPUTransferBuffer(
+        device,
+        &transferBufferInfo);
+
+    if (transferBuffer == NULL)
+    {
+        SDL_Log("Failed to create transfer buffer!");
+        return false;
+    }
+
+    void *transferBufferPtr = SDL_MapGPUTransferBuffer(
+        device,
+        transferBuffer,
+        false);
+    SDL_memcpy(transferBufferPtr, data, size);
+    SDL_UnmapGPUTransferBuffer(device, transferBuffer);
+
+    SDL_GPUTextureTransferInfo transferInfo = {};
+    transferInfo.transfer_buffer = transferBuffer;
+    transferInfo.offset = 0;
+
+    SDL_GPUTextureRegion region = {};
+    region.texture = texture->texture;
+    region.w = width;
+    region.h = height;
+    region.d = 1;
+
+    SDL_GPUCommandBuffer *uploadCmdBuf = SDL_AcquireGPUCommandBuffer(device);
+    SDL_GPUCopyPass *copyPass = SDL_BeginGPUCopyPass(uploadCmdBuf);
+
+    SDL_UploadToGPUTexture(
+        copyPass,
+        &transferInfo,
+        &region,
+        false);
+
+    SDL_EndGPUCopyPass(copyPass);
+    SDL_SubmitGPUCommandBuffer(uploadCmdBuf);
+    SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
+    return true;
+}
