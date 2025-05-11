@@ -5,6 +5,7 @@
 #include <cmath>
 #include <glm/glm.hpp>
 #include <iostream>
+#include <map>
 #include <mutex>
 #include <stdio.h>
 #include <vector>
@@ -89,10 +90,10 @@ protected:
     std::vector<Named_DepthBuffer> _depthBuffers;
     std::vector<Named_Texture> _textures;
     std::vector<Named_VBO> _VBOs;
+    std::map<std::string, TransferBuffer_Struct> _UBOs;
 
     // friend functions
-    friend int
-    PixL_Renderer_Init(uint32_t flags);
+    friend int PixL_Renderer_Init(uint32_t flags);
     friend int PixL_Renderer_Quit();
     friend SDL_Window *CreateWindow(const char *title, int w, int h, Uint32 flags);
     friend SDL_Window *GetWindow();
@@ -151,6 +152,10 @@ protected:
     friend bool PixL_CreateVBO(std::string name, size_t size);
     friend bool PixL_DestroyVBO(std::string name);
     friend VertexBuffer_Struct *PixL_GetVBO(std::string name);
+
+    friend bool PixL_CreateUBO(std::string name, size_t size);
+    friend bool PixL_DestroyUBO(std::string name);
+    friend TransferBuffer_Struct *PixL_GetUBO(std::string name);
 
     friend int PixL_GetDrawCalls();
 
@@ -226,6 +231,9 @@ bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBuffer
 bool PixL_EndRenderPass();
 bool PixL_CreateVBO(std::string name, size_t size);
 bool PixL_DestroyVBO(std::string name);
+bool PixL_CreateUBO(std::string name, size_t size);
+bool PixL_DestroyUBO(std::string name);
+TransferBuffer_Struct *PixL_GetUBO(std::string name);
 VertexBuffer_Struct *PixL_GetVBO(std::string name);
 
 glm::vec2 PixL_GetWindowSize();

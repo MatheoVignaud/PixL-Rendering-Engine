@@ -586,6 +586,7 @@ bool PixL_UpdateTexture(std::string name, void *data, size_t size)
         if (texture.name == name)
         {
             UpdateTexture(PixL_Renderer::_instance->_device, &texture.sampler, texture.width, texture.height, data, size);
+            return true;
         }
     }
     SDL_Log("Texture %s not found", name.c_str());
@@ -920,4 +921,66 @@ void PixL_Callback_WindowResized()
         return;
     }
     SDL_GetWindowSize(PixL_Renderer::_instance->_window, &PixL_Renderer::_instance->window_width, &PixL_Renderer::_instance->window_height);
+}
+
+bool PixL_CreateUBO(std::string name, size_t size)
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    // Check if the UBO already exists in map
+    if (PixL_Renderer::_instance->_UBOs.find(name) != PixL_Renderer::_instance->_UBOs.end())
+    {
+        SDL_Log("UBO %s already exists", name.c_str());
+        return false;
+    }
+    // Create the UBO
+    TransferBuffer_Struct ubo = CreateUBO(PixL_Renderer::_instance->_device, size);
+    if (!ubo.transferBuffer)
+    {
+        SDL_Log("Could not create UBO: %s", SDL_GetError());
+        return false;
+    }
+    PixL_Renderer::_instance->_UBOs[name] = ubo;
+    SDL_Log("UBO %s created successfully", name.c_str());
+    return true;
+}
+
+bool PixL_DestroyUBO(std::string name)
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    // Check if the UBO exists in map
+    auto it = PixL_Renderer::_instance->_UBOs.find(name);
+    if (it != PixL_Renderer::_instance->_UBOs.end())
+    {
+        it->second.Destroy(PixL_Renderer::_instance->_device);
+        PixL_Renderer::_instance->_UBOs.erase(it);
+        SDL_Log("UBO %s destroyed successfully", name.c_str());
+        return true;
+    }
+    SDL_Log("UBO %s not found", name.c_str());
+    return false;
+}
+
+TransferBuffer_Struct *PixL_GetUBO(std::string name)
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return nullptr;
+    }
+    // Check if the UBO exists in map
+    auto it = PixL_Renderer::_instance->_UBOs.find(name);
+    if (it != PixL_Renderer::_instance->_UBOs.end())
+    {
+        return &it->second;
+    }
+    SDL_Log("UBO %s not found", name.c_str());
+    return nullptr;
 }
