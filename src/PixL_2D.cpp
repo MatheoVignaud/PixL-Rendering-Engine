@@ -94,6 +94,7 @@ void PixL_2D::renderLayer(uint8_t layer_id)
             if (needToClear)
             {
                 PixL_StartRenderPass(layer._TextureName, "", false, true);
+                needToClear = false;
             }
             else
             {
