@@ -152,6 +152,7 @@ protected:
     friend bool PixL_CreateVBO(std::string name, size_t size);
     friend bool PixL_DestroyVBO(std::string name);
     friend VertexBuffer_Struct *PixL_GetVBO(std::string name);
+    friend SDL_GPUDevice *PixL_GetDevice();
 
     friend bool PixL_CreateUBO(std::string name, size_t size);
     friend bool PixL_DestroyUBO(std::string name);
@@ -235,6 +236,7 @@ bool PixL_CreateUBO(std::string name, size_t size);
 bool PixL_DestroyUBO(std::string name);
 TransferBuffer_Struct *PixL_GetUBO(std::string name);
 VertexBuffer_Struct *PixL_GetVBO(std::string name);
+SDL_GPUDevice *PixL_GetDevice();
 
 glm::vec2 PixL_GetWindowSize();
 

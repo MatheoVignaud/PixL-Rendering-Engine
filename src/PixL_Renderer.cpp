@@ -813,6 +813,16 @@ VertexBuffer_Struct *PixL_GetVBO(std::string name)
     return nullptr;
 }
 
+SDL_GPUDevice *PixL_GetDevice()
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return nullptr;
+    }
+    return PixL_Renderer::_instance->_device;
+}
+
 bool PixL_Pipelines_Layout_Compatibility(std::string Pipeline1, std::string Pipeline2)
 {
     if (!PixL_Renderer::_instance)
