@@ -823,6 +823,26 @@ SDL_GPUDevice *PixL_GetDevice()
     return PixL_Renderer::_instance->_device;
 }
 
+SDL_GPURenderPass *PixL_GetRenderPass()
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return nullptr;
+    }
+    return PixL_Renderer::_instance->renderPass;
+}
+
+SDL_GPUCommandBuffer *PixL_GetCommandBuffer()
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return nullptr;
+    }
+    return PixL_Renderer::_instance->commandBuffer;
+}
+
 bool PixL_Pipelines_Layout_Compatibility(std::string Pipeline1, std::string Pipeline2)
 {
     if (!PixL_Renderer::_instance)
