@@ -108,7 +108,7 @@ bool PixL_Draw(
     int vertexCount,
     VertexBuffer_Struct *vertexBuffer,
     std::pair<void *, size_t> vertexBufferUBOData,
-    TransferBuffer_Struct *vertexBufferSSBO,
+    std::vector<std::string> vertexBufferSSBO,
 
     // fragment
     std::vector<std::string> fragmentBufferSamplerNames, // bind samplers to the fragment shader , order is important
@@ -185,6 +185,44 @@ bool PixL_Draw(
     if (vertexBufferUBOData.first && pipeline->vertexShader_UniformBuffer_Count > 0)
     {
         SDL_PushGPUVertexUniformData(PixL_Renderer::_instance->commandBuffer, 0, vertexBufferUBOData.first, vertexBufferUBOData.second);
+    }
+    if (vertexBufferSSBO.size() > 0 && pipeline->vertexShader_StorageBuffer_Count > 0)
+    {
+        for (size_t i = 0; i < vertexBufferSSBO.size(); ++i)
+        {
+
+            TransferBuffer_Struct *ssbo = nullptr;
+
+            auto it = PixL_Renderer::_instance->_SSBOs.find(vertexBufferSSBO[i]);
+            if (it != PixL_Renderer::_instance->_SSBOs.end())
+            {
+                ssbo = &it->second;
+            }
+            else
+            {
+                SDL_Log("Vertex buffer SSBO %s not found", vertexBufferSSBO[i].c_str());
+                throw std::runtime_error("Vertex buffer SSBO not found");
+                return false;
+            }
+            if (!ssbo->buffer)
+            {
+                SDL_Log("Vertex buffer SSBO %s not found", vertexBufferSSBO[i].c_str());
+                throw std::runtime_error("Vertex buffer SSBO not found");
+                return false;
+            }
+
+            if (!ssbo)
+            {
+                SDL_Log("Vertex buffer SSBO %s not found", vertexBufferSSBO[i].c_str());
+                throw std::runtime_error("Vertex buffer SSBO not found");
+                return false;
+            }
+            SDL_BindGPUVertexStorageBuffers(
+                PixL_Renderer::_instance->renderPass,
+                i,
+                &ssbo->buffer,
+                1);
+        }
     }
     // Bind the vertex storage buffer
 
@@ -1013,4 +1051,67 @@ TransferBuffer_Struct *PixL_GetUBO(std::string name)
     }
     SDL_Log("UBO %s not found", name.c_str());
     return nullptr;
+}
+
+bool PixL_CreateSSBO(std::string name, size_t size)
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    // Check if the SSBO already exists in map
+    if (PixL_Renderer::_instance->_SSBOs.find(name) != PixL_Renderer::_instance->_SSBOs.end())
+    {
+        SDL_Log("SSBO %s already exists", name.c_str());
+        return false;
+    }
+    // Create the SSBO
+    TransferBuffer_Struct ssbo = CreateSSBO(PixL_Renderer::_instance->_device, size);
+    if (!ssbo.transferBuffer)
+    {
+        SDL_Log("Could not create SSBO: %s", SDL_GetError());
+        return false;
+    }
+    PixL_Renderer::_instance->_SSBOs[name] = ssbo;
+    SDL_Log("SSBO %s created successfully", name.c_str());
+    return true;
+}
+
+bool PixL_DestroySSBO(std::string name)
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    // Check if the SSBO exists in map
+    auto it = PixL_Renderer::_instance->_SSBOs.find(name);
+    if (it != PixL_Renderer::_instance->_SSBOs.end())
+    {
+        it->second.Destroy(PixL_Renderer::_instance->_device);
+        PixL_Renderer::_instance->_SSBOs.erase(it);
+        SDL_Log("SSBO %s destroyed successfully", name.c_str());
+        return true;
+    }
+    SDL_Log("SSBO %s not found", name.c_str());
+    return false;
+}
+
+bool PixL_UpdateSSBO(std::string name, void *data, size_t size)
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    // Check if the SSBO exists in map
+    auto it = PixL_Renderer::_instance->_SSBOs.find(name);
+    if (it != PixL_Renderer::_instance->_SSBOs.end())
+    {
+        UpdateSSBO(PixL_Renderer::_instance->_device, &it->second, data, size);
+        return true;
+    }
+    SDL_Log("SSBO %s not found", name.c_str());
+    return false;
 }

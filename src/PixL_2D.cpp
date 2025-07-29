@@ -192,7 +192,7 @@ void PixL_2D::compositeLayers()
             if (layers[i].is_composite)
             {
                 PixL_Draw(
-                    "Fullscreen", "", "", 1, 6, nullptr, {}, nullptr, {layers[i]._TextureName}, {}, nullptr);
+                    "Fullscreen", "", "", 1, 6, nullptr, {}, {}, {layers[i]._TextureName}, {}, nullptr);
             }
         }
     }

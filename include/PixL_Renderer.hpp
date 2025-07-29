@@ -91,6 +91,7 @@ protected:
     std::vector<Named_Texture> _textures;
     std::vector<Named_VBO> _VBOs;
     std::map<std::string, TransferBuffer_Struct> _UBOs;
+    std::map<std::string, TransferBuffer_Struct> _SSBOs;
 
     // friend functions
     friend int PixL_Renderer_Init(uint32_t flags);
@@ -108,7 +109,7 @@ protected:
         int vertexCount,
         VertexBuffer_Struct *vertexBuffer,
         std::pair<void *, size_t> vertexBufferUBOData,
-        TransferBuffer_Struct *vertexBufferSSBO,
+        std::vector<std::string> vertexBufferSSBO, // bind SSBOs to the vertex shader , order is important
 
         // fragment
         std::vector<std::string> fragmentBufferSamplerNames, // bind samplers to the fragment shader , order is important
@@ -160,6 +161,11 @@ protected:
     friend bool PixL_DestroyUBO(std::string name);
     friend TransferBuffer_Struct *PixL_GetUBO(std::string name);
 
+    friend bool PixL_CreateSSBO(std::string name, size_t size);
+    friend bool PixL_DestroySSBO(std::string name);
+    friend TransferBuffer_Struct *PixL_GetSSBO(std::string name);
+    friend bool PixL_UpdateSSBO(std::string name, void *data, size_t size);
+
     friend int PixL_GetDrawCalls();
 
     friend bool PixL_2D_Init(uint32_t flags);
@@ -191,7 +197,7 @@ bool PixL_Draw(
     int vertexCount,
     VertexBuffer_Struct *vertexBuffer,
     std::pair<void *, size_t> vertexBufferUBOData,
-    TransferBuffer_Struct *vertexBufferSSBO,
+    std::vector<std::string> vertexBufferSSBO, // bind SSBOs to the vertex shader , order is important
 
     // fragment
     std::vector<std::string> fragmentBufferSamplerNames, // bind samplers to the fragment shader , order is important
@@ -236,6 +242,9 @@ bool PixL_CreateVBO(std::string name, size_t size);
 bool PixL_DestroyVBO(std::string name);
 bool PixL_CreateUBO(std::string name, size_t size);
 bool PixL_DestroyUBO(std::string name);
+bool PixL_CreateSSBO(std::string name, size_t size);
+bool PixL_DestroySSBO(std::string name);
+bool PixL_UpdateSSBO(std::string name, void *data, size_t size);
 TransferBuffer_Struct *PixL_GetUBO(std::string name);
 VertexBuffer_Struct *PixL_GetVBO(std::string name);
 SDL_GPUDevice *PixL_GetDevice();

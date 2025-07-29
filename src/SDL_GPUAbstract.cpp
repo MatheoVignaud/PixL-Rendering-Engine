@@ -59,7 +59,7 @@ SDL_GPUTextureSamplerBinding CreateSamplerFromImage(SDL_GPUDevice *device, std::
     void *textureTransferPtr = SDL_MapGPUTransferBuffer(
         device,
         textureTransferBuffer,
-        false);
+        true);
 
     SDL_memcpy(textureTransferPtr, surface->pixels, surface->w * surface->h * 4);
     SDL_UnmapGPUTransferBuffer(device, textureTransferBuffer);
@@ -174,6 +174,31 @@ TransferBuffer_Struct CreateUBO(SDL_GPUDevice *device, size_t size)
     return {uboTransferBuffer, UBOBuffer};
 }
 
+TransferBuffer_Struct CreateSSBO(SDL_GPUDevice *device, size_t size)
+{
+    SDL_GPUTransferBufferCreateInfo ssboTransferBufferCreateInfo = {};
+    ssboTransferBufferCreateInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    ssboTransferBufferCreateInfo.size = size;
+
+    SDL_GPUTransferBuffer *ssboTransferBuffer = SDL_CreateGPUTransferBuffer(
+        device,
+        &ssboTransferBufferCreateInfo);
+
+    SDL_GPUBufferCreateInfo ssboBufferCreateInfo = {};
+    ssboBufferCreateInfo.usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
+    ssboBufferCreateInfo.size = size;
+
+    SDL_GPUBuffer *SSBOBuffer = SDL_CreateGPUBuffer(
+        device,
+        &ssboBufferCreateInfo);
+
+    TransferBuffer_Struct ssboTransferBuffer_Struct = {};
+    ssboTransferBuffer_Struct.transferBuffer = ssboTransferBuffer;
+    ssboTransferBuffer_Struct.buffer = SSBOBuffer;
+
+    return ssboTransferBuffer_Struct;
+}
+
 VertexBuffer_Struct CreateVBO(SDL_GPUDevice *device, size_t size)
 {
     SDL_GPUTransferBufferCreateInfo vboTransferBufferCreateInfo = {};
@@ -199,6 +224,47 @@ VertexBuffer_Struct CreateVBO(SDL_GPUDevice *device, size_t size)
     VBOBuffer_Struct.size = size;
 
     return VBOBuffer_Struct;
+}
+
+bool UpdateSSBO(SDL_GPUDevice *device, TransferBuffer_Struct *ssbo, void *data, size_t size)
+{
+
+    // check if the SSBO is valid
+    if (ssbo == nullptr || ssbo->transferBuffer == nullptr || ssbo->buffer == nullptr)
+    {
+        SDL_Log("Invalid SSBO provided!");
+        return false;
+    }
+
+    // update the SSBO data
+    void *ptr = SDL_MapGPUTransferBuffer(device, ssbo->transferBuffer, true);
+    if (ptr == NULL)
+    {
+        SDL_Log("Failed to map SSBO transfer buffer!");
+        return false;
+    }
+    SDL_memcpy(ptr, data, size);
+    SDL_UnmapGPUTransferBuffer(device, ssbo->transferBuffer);
+
+    // upload the SSBO data to the GPU
+    SDL_GPUCommandBuffer *uploadCmdBuf = SDL_AcquireGPUCommandBuffer(device);
+    SDL_GPUCopyPass *copyPass = SDL_BeginGPUCopyPass(uploadCmdBuf);
+    SDL_GPUTransferBufferLocation transferBufferLocation = {};
+    transferBufferLocation.transfer_buffer = ssbo->transferBuffer;
+    transferBufferLocation.offset = 0;
+    SDL_GPUBufferRegion bufferRegion = {};
+    bufferRegion.buffer = ssbo->buffer;
+    bufferRegion.offset = 0;
+    bufferRegion.size = size;
+    SDL_UploadToGPUBuffer(
+        copyPass,
+        &transferBufferLocation,
+        &bufferRegion,
+        false);
+    SDL_EndGPUCopyPass(copyPass);
+    SDL_SubmitGPUCommandBuffer(uploadCmdBuf);
+
+    return true;
 }
 
 IndexBuffer_Struct CreateEBO(SDL_GPUDevice *device, size_t size)
@@ -415,7 +481,7 @@ bool UpdateTexture(SDL_GPUDevice *device, SDL_GPUTextureSamplerBinding *texture,
     void *transferBufferPtr = SDL_MapGPUTransferBuffer(
         device,
         transferBuffer,
-        false);
+        true);
     SDL_memcpy(transferBufferPtr, data, size);
     SDL_UnmapGPUTransferBuffer(device, transferBuffer);
 
