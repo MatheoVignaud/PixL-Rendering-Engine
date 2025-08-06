@@ -9,6 +9,20 @@ SDL_GPUTextureSamplerBinding CreateSamplerFromImage(SDL_GPUDevice *device, std::
         return {};
     }
 
+    SDL_GPUTextureSamplerBinding sampler = CreateSamplerFromSurface(device, surface, getWidth, getHeight);
+    if (!sampler.texture)
+    {
+        SDL_Log("Could not create texture from image: %s", SDL_GetError());
+        return {};
+    }
+
+    SDL_DestroySurface(surface);
+
+    return sampler;
+}
+
+SDL_GPUTextureSamplerBinding CreateSamplerFromSurface(SDL_GPUDevice *device, SDL_Surface *surface, uint32_t *getWidth, uint32_t *getHeight)
+{
     // get surface pixel format
     SDL_PixelFormat format = surface->format;
 
@@ -111,11 +125,11 @@ SDL_GPUTextureSamplerBinding CreateSamplerFromImage(SDL_GPUDevice *device, std::
     SDL_EndGPUCopyPass(copyPass);
     SDL_SubmitGPUCommandBuffer(uploadCmdBuf);
 
-    SDL_DestroySurface(surface);
     SDL_ReleaseGPUTransferBuffer(device, textureTransferBuffer);
 
     return {Texture, Sampler};
 }
+
 SDL_GPUTextureSamplerBinding CreateBlankSampler(SDL_GPUDevice *device, SDL_GPUTextureFormat format, uint32_t width, uint32_t height, SDL_GPUTextureUsageFlags usage)
 {
     SDL_GPUTextureCreateInfo textureCreateInfo = {};

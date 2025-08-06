@@ -580,6 +580,41 @@ bool PixL_CreateTexture(std::string name, std::string imagePath)
     return true;
 }
 
+bool PixL_CreateTexture(std::string name, SDL_Surface *surface)
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    // Check if the texture already exists
+    for (const auto &texture : PixL_Renderer::_instance->_textures)
+    {
+        if (texture.name == name)
+        {
+            SDL_Log("Texture %s already exists", name);
+            return false;
+        }
+    }
+
+    uint32_t width = 0;
+    uint32_t height = 0;
+
+    SDL_GPUTextureSamplerBinding sampler = CreateSamplerFromSurface(PixL_Renderer::_instance->_device, surface, &width, &height);
+    if (!sampler.texture)
+    {
+        SDL_Log("Could not create texture: %s", SDL_GetError());
+        return false;
+    }
+
+    Named_Texture named_texture = {name, sampler, width, height};
+    PixL_Renderer::_instance->_textures.push_back(named_texture);
+
+    SDL_Log("Texture %s created successfully", name.c_str());
+
+    return true;
+}
+
 bool PixL_CreateBlankTexture(std::string name, int width, int height, SDL_GPUTextureUsageFlags usage, SDL_GPUTextureFormat format)
 {
     if (!PixL_Renderer::_instance)

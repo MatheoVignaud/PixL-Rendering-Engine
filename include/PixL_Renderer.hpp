@@ -142,6 +142,7 @@ protected:
     friend bool PixL_CreateDepthBuffer(std::string name);
     friend bool PixL_DestroyDepthBuffer(std::string name);
     friend bool PixL_CreateTexture(std::string name, std::string imagePath);
+    friend bool PixL_CreateTexture(std::string name, SDL_Surface *surface);
     friend bool PixL_CreateBlankTexture(std::string name, int width, int height, SDL_GPUTextureUsageFlags usage, SDL_GPUTextureFormat format);
     friend bool PixL_UpdateTexture(std::string name, void *data, size_t size);
     friend bool PixL_DestroyTexture(std::string name);
@@ -170,6 +171,7 @@ protected:
 
     friend bool PixL_2D_Init(uint32_t flags);
     friend class PixL_2D;
+    friend class PixL_Ressource;
 
     friend glm::vec2 PixL_GetWindowSize();
 
@@ -233,6 +235,7 @@ bool PixL_DestroyPipeline(std::string name);
 bool PixL_CreateDepthBuffer(std::string name);
 bool PixL_DestroyDepthBuffer(std::string name);
 bool PixL_CreateTexture(std::string name, std::string imagePath);
+bool PixL_CreateTexture(std::string name, SDL_Surface *surface);
 bool PixL_CreateBlankTexture(std::string name, int width, int height, SDL_GPUTextureUsageFlags usage = SDL_GPU_TEXTUREUSAGE_SAMPLER, SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM);
 bool PixL_UpdateTexture(std::string name, void *data, size_t size);
 bool PixL_DestroyTexture(std::string name);

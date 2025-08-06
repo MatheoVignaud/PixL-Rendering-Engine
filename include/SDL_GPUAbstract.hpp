@@ -169,6 +169,7 @@ struct DepthBuffer_Struct
 };
 
 SDL_GPUTextureSamplerBinding CreateSamplerFromImage(SDL_GPUDevice *device, std::string image_Path, uint32_t *getWidth = nullptr, uint32_t *getHeight = nullptr);
+SDL_GPUTextureSamplerBinding CreateSamplerFromSurface(SDL_GPUDevice *device, SDL_Surface *surface, uint32_t *getWidth = nullptr, uint32_t *getHeight = nullptr);
 SDL_GPUTextureSamplerBinding CreateBlankSampler(SDL_GPUDevice *device, SDL_GPUTextureFormat format, uint32_t width, uint32_t height, SDL_GPUTextureUsageFlags usage = SDL_GPU_TEXTUREUSAGE_SAMPLER);
 TransferBuffer_Struct CreateUBO(SDL_GPUDevice *device, size_t size);
 TransferBuffer_Struct CreateSSBO(SDL_GPUDevice *device, size_t size);
