@@ -80,6 +80,7 @@ protected:
     SDL_GPUCommandBuffer *commandBuffer = nullptr;
     SDL_GPUTexture *swapchainTexture;
     SDL_GPURenderPass *renderPass = nullptr;
+    std::string off_screen_RenderTextureName = "";
 
     bool drawing = false;
 
@@ -136,6 +137,8 @@ protected:
         std::pair<void *, size_t> fragmentBufferUBOData,
         TransferBuffer_Struct *fragmentBufferSSBO);
     friend bool PixL_StartDraw();
+    friend bool PixL_StartDraw_Offsceen(std::string RenderTextureName);
+    friend bool PixL_EndDraw_Offsceen();
     friend void PixL_SwapBuffers();
     friend bool PixL_CreatePipeline(std::string name, Shader_Struct *vertexShader, Shader_Struct *fragmentShader, bool depthTest, SDL_GPUCompareOp compareOp, bool enable_depth_test, bool enable_depth_write);
     friend bool PixL_DestroyPipeline(std::string name);
@@ -146,6 +149,7 @@ protected:
     friend bool PixL_CreateBlankTexture(std::string name, int width, int height, SDL_GPUTextureUsageFlags usage, SDL_GPUTextureFormat format);
     friend bool PixL_UpdateTexture(std::string name, void *data, size_t size);
     friend bool PixL_DestroyTexture(std::string name);
+    friend Named_Texture *PixL_GetNamedTexture(std::string name);
 
     friend bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBufferName, bool needDepthBuffer, bool clearBuffers);
     friend bool PixL_EndRenderPass();
@@ -228,6 +232,8 @@ bool PixL_DrawIndexed(
     TransferBuffer_Struct *fragmentBufferSSBO);
 
 bool PixL_StartDraw();
+bool PixL_StartDraw_Offsceen(std::string RenderTextureName);
+bool PixL_EndDraw_Offsceen();
 void PixL_SwapBuffers();
 bool PixL_CreatePipeline(std::string name, Shader_Struct *vertexShader, Shader_Struct *fragmentShader, bool depthTest = false, SDL_GPUCompareOp compareOp = SDL_GPU_COMPAREOP_LESS, bool enable_depth_test = true, bool enable_depth_write = true);
 bool PixL_Pipelines_Layout_Compatibility(std::string Pipeline1, std::string Pipeline2);
@@ -239,6 +245,7 @@ bool PixL_CreateTexture(std::string name, SDL_Surface *surface);
 bool PixL_CreateBlankTexture(std::string name, int width, int height, SDL_GPUTextureUsageFlags usage = SDL_GPU_TEXTUREUSAGE_SAMPLER, SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM);
 bool PixL_UpdateTexture(std::string name, void *data, size_t size);
 bool PixL_DestroyTexture(std::string name);
+Named_Texture *PixL_GetNamedTexture(std::string name);
 bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBufferName, bool needDepthBuffer, bool clearBuffers = false);
 bool PixL_EndRenderPass();
 bool PixL_CreateVBO(std::string name, size_t size);

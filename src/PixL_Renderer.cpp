@@ -424,6 +424,68 @@ bool PixL_StartDraw()
     return true;
 }
 
+bool PixL_StartDraw_Offsceen(std::string RenderTextureName)
+{
+    // check if the render texture exists and support render target (TODO)
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    if (PixL_Renderer::_instance->drawing)
+    {
+        SDL_Log("PixL_Renderer already drawing. Call PixL_SwapBuffers() first.");
+        return false;
+    }
+    PixL_Renderer::_instance->drawing = true;
+    PixL_Renderer::_instance->commandBuffer = SDL_AcquireGPUCommandBuffer(PixL_Renderer::_instance->_device);
+    if (!PixL_Renderer::_instance->commandBuffer)
+    {
+        SDL_Log("Could not acquire command buffer: %s", SDL_GetError());
+        return false;
+    }
+    SDL_GPUTexture *renderTexture = nullptr;
+    for (const auto &texture : PixL_Renderer::_instance->_textures)
+    {
+        if (texture.name == RenderTextureName)
+        {
+            renderTexture = texture.sampler.texture;
+            break;
+        }
+    }
+    if (!renderTexture)
+    {
+        SDL_Log("Render texture %s not found", RenderTextureName.c_str());
+        return false;
+    }
+    PixL_Renderer::_instance->off_screen_RenderTextureName = RenderTextureName;
+    return true;
+}
+
+bool PixL_EndDraw_Offsceen()
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return false;
+    }
+    if (!PixL_Renderer::_instance->drawing)
+    {
+        SDL_Log("PixL_Renderer not drawing. Call PixL_StartDraw() first.");
+        return false;
+    }
+    if (PixL_Renderer::_instance->off_screen_RenderTextureName == "")
+    {
+        SDL_Log("PixL_Renderer not drawing offscreen. Call PixL_StartDraw_Offsceen() first.");
+        return false;
+    }
+    // Submit the command buffer
+    SDL_SubmitGPUCommandBuffer(PixL_Renderer::_instance->commandBuffer);
+    PixL_Renderer::_instance->off_screen_RenderTextureName = "";
+    PixL_Renderer::_instance->drawing = false;
+    return true;
+}
+
 void PixL_SwapBuffers()
 {
     if (!PixL_Renderer::_instance)
@@ -688,6 +750,23 @@ bool PixL_DestroyTexture(std::string name)
     return false;
 }
 
+Named_Texture *PixL_GetNamedTexture(std::string name)
+{
+    if (!PixL_Renderer::_instance)
+    {
+        SDL_Log("PixL_Renderer not initialized. Call PixL_Renderer_Init() first.");
+        return nullptr;
+    }
+    for (int i = 0; i < PixL_Renderer::_instance->_textures.size(); i++)
+    {
+        if (PixL_Renderer::_instance->_textures[i].name == name)
+        {
+            return &PixL_Renderer::_instance->_textures[i];
+        }
+    }
+    return nullptr;
+}
+
 bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBufferName, bool needDepthBuffer, bool clearBuffers)
 {
     if (!PixL_Renderer::_instance)
@@ -700,6 +779,10 @@ bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBuffer
         SDL_Log("PixL_Renderer not drawing. Call PixL_StartDraw() first.");
         return false;
     }
+    if (RenderTextureName == "" && PixL_Renderer::_instance->off_screen_RenderTextureName != "")
+    {
+        RenderTextureName = PixL_Renderer::_instance->off_screen_RenderTextureName;
+    }
 
     // Find the render texture
     SDL_GPUTexture *renderTexture = nullptr;
@@ -707,6 +790,7 @@ bool PixL_StartRenderPass(std::string RenderTextureName, std::string DepthBuffer
     {
         for (auto &texture : PixL_Renderer::_instance->_textures)
         {
+
             if (texture.name == RenderTextureName)
             {
                 renderTexture = texture.sampler.texture;
