@@ -8,34 +8,77 @@ PixL_Renderer *PixL_Renderer::_instance = nullptr;
 
 PixL_Renderer::~PixL_Renderer()
 {
-    if (_window)
+    commandBuffer = nullptr;
+
+    for (auto &pipeline : _pipelines)
     {
-        SDL_DestroyWindow(_window);
-        _window = nullptr;
+        if (_device && pipeline.pipeline)
+        {
+            SDL_ReleaseGPUGraphicsPipeline(_device, pipeline.pipeline);
+        }
     }
+    _pipelines.clear();
+
+    for (auto &texture : _textures)
+    {
+        if (_device && texture.sampler.texture)
+        {
+            SDL_ReleaseGPUTexture(_device, texture.sampler.texture);
+        }
+        if (_device && texture.sampler.sampler)
+        {
+            SDL_ReleaseGPUSampler(_device, texture.sampler.sampler);
+        }
+    }
+    _textures.clear();
+
+    for (auto &depthBuffer : _depthBuffers)
+    {
+        if (_device)
+        {
+            depthBuffer.depthBuffer.Destroy(_device);
+        }
+    }
+    _depthBuffers.clear();
+
+    for (auto &ubo : _UBOs)
+    {
+        if (_device)
+        {
+            ubo.second.Destroy(_device);
+        }
+    }
+    _UBOs.clear();
+
+    for (auto &ssbo : _SSBOs)
+    {
+        if (_device)
+        {
+            ssbo.second.Destroy(_device);
+        }
+    }
+    _SSBOs.clear();
+
+    for (auto &vbo : _VBOs)
+    {
+        if (_device)
+        {
+            vbo.vertexBuffer.Destroy(_device);
+        }
+    }
+    _VBOs.clear();
+
     if (_device)
     {
         SDL_DestroyGPUDevice(_device);
         _device = nullptr;
     }
-    if (commandBuffer)
+
+    if (_window)
     {
+        SDL_DestroyWindow(_window);
+        _window = nullptr;
     }
-    for (auto &pipeline : _pipelines)
-    {
-        SDL_ReleaseGPUGraphicsPipeline(_device, pipeline.pipeline);
-    }
-    for (auto &texture : _textures)
-    {
-        SDL_ReleaseGPUTexture(_device, texture.sampler.texture);
-        SDL_ReleaseGPUSampler(_device, texture.sampler.sampler);
-    }
-    for (auto &depthBuffer : _depthBuffers)
-    {
-        depthBuffer.depthBuffer.Destroy(_device);
-    }
-    SDL_DestroyGPUDevice(_device);
-    SDL_DestroyWindow(_window);
 }
 
 int PixL_Renderer_Init(uint32_t flags)
@@ -53,7 +96,8 @@ int PixL_Renderer_Quit()
 {
     if (PixL_Renderer::_instance)
     {
-        PixL_Renderer::_instance->~PixL_Renderer();
+        delete PixL_Renderer::_instance;
+        PixL_Renderer::_instance = nullptr;
     }
     return 0;
 }
